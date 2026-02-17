@@ -1,0 +1,578 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// GLOBAL TABLES (Managed by AUFA Super-Admin)
+// ============================================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  role          UserRole @default(PLAYER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // AUFA ID - Global player identity
+  player        Player?
+  // Referee profile
+  referee       Referee?
+  // Tenant memberships (league admin, operator)
+  tenantMembers TenantMember[]
+
+  @@map("users")
+}
+
+model Player {
+  id                    String                   @id @default(cuid())
+  userId                String                   @unique
+  user                  User                     @relation(fields: [userId], references: [id])
+  aufaId                String                   @unique @default(cuid()) // Unique AUFA passport ID
+  ci                    String                   @unique // Cédula de Identidad
+  fullName              String
+  dateOfBirth           DateTime
+  phone                 String?
+  photoUrl              String?
+  ciPhotoFrontUrl       String?
+  ciPhotoBackUrl        String?
+  selfieUrl             String?
+  identityStatus        IdentityValidationStatus @default(PENDING)
+  identityValidatedBy   String?  // userId of the league admin who validated
+  identityValidatedAt   DateTime?
+
+  // Medical clearance
+  medicalClearances     MedicalClearance[]
+
+  // Team memberships across leagues
+  teamPlayers           TeamPlayer[]
+
+  // Match participations
+  matchLineups          MatchLineup[]
+  goals                 Goal[]
+  cards                 Card[]
+  substitutionsOut      Substitution[]          @relation("PlayerOut")
+  substitutionsIn       Substitution[]          @relation("PlayerIn")
+  assists               Goal[]                  @relation("AssistPlayer")
+
+  // Sanctions across leagues
+  sanctions             Sanction[]
+
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@map("players")
+}
+
+model MedicalClearance {
+  id          String   @id @default(cuid())
+  playerId    String
+  player      Player   @relation(fields: [playerId], references: [id])
+  documentUrl String
+  issuedAt    DateTime
+  expiresAt   DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("medical_clearances")
+}
+
+model Referee {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id])
+  fullName       String
+  phone          String?
+  photoUrl       String?
+  bio            String?
+  certifications String[]
+  isAvailable    Boolean  @default(true)
+
+  // Availability slots
+  availability   RefereeAvailability[]
+
+  // Assigned matches
+  matches        Match[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("referees")
+}
+
+model RefereeAvailability {
+  id        String @id @default(cuid())
+  refereeId String
+  referee   Referee @relation(fields: [refereeId], references: [id])
+  dayOfWeek Int    // 0=Sunday, 6=Saturday
+  startTime String // HH:mm
+  endTime   String // HH:mm
+
+  @@map("referee_availability")
+}
+
+// ============================================================
+// TENANT / MULTI-TENANT TABLES
+// ============================================================
+
+model Tenant {
+  id              String           @id @default(cuid())
+  name            String
+  slug            String           @unique
+  subdomain       String           @unique // e.g., "ligauniversitaria"
+  customDomain    String?          @unique
+  plan            SubscriptionPlan @default(BARRIO)
+  isActive        Boolean          @default(true)
+
+  // Branding (Marca Blanca)
+  logoUrl         String?
+  bannerUrl       String?
+  primaryColor    String           @default("#1a56db")
+  secondaryColor  String           @default("#1e3a5f")
+  accentColor     String           @default("#f59e0b")
+  backgroundColor String           @default("#ffffff")
+  textColor       String           @default("#111827")
+
+  // Financial
+  mercadoPagoToken    String?
+  stripeAccountId     String?
+  bankAccount         String?
+  commissionRate      Float           @default(0.04) // 4% AUFA commission
+
+  // Members
+  members         TenantMember[]
+
+  // Tournaments
+  tournaments     Tournament[]
+
+  // Teams registered in this league
+  teams           Team[]
+
+  // Venues
+  venues          Venue[]
+
+  // Payment orders
+  paymentOrders   PaymentOrder[]
+
+  // Subscription invoices
+  invoices        SubscriptionInvoice[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("tenants")
+}
+
+model TenantMember {
+  id        String     @id @default(cuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  role      TenantRole @default(OPERATOR)
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+
+  @@unique([tenantId, userId])
+  @@map("tenant_members")
+}
+
+model Venue {
+  id        String      @id @default(cuid())
+  tenantId  String
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
+  name      String
+  address   String?
+  slots     VenueSlot[]
+  matches   Match[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@map("venues")
+}
+
+model VenueSlot {
+  id        String @id @default(cuid())
+  venueId   String
+  venue     Venue  @relation(fields: [venueId], references: [id])
+  dayOfWeek Int    // 0=Sunday, 6=Saturday
+  startTime String // HH:mm
+  endTime   String // HH:mm
+
+  @@map("venue_slots")
+}
+
+// ============================================================
+// TOURNAMENT & TEAM TABLES
+// ============================================================
+
+model Tournament {
+  id                  String           @id @default(cuid())
+  tenantId            String
+  tenant              Tenant           @relation(fields: [tenantId], references: [id])
+  name                String
+  status              TournamentStatus @default(DRAFT)
+  gameType            GameType
+
+  // Rules
+  pointsForWin        Int              @default(3)
+  pointsForDraw       Int              @default(1)
+  pointsForLoss       Int              @default(0)
+  fairPlayBonusPoints Int              @default(0)
+  tiebreakerOrder     TiebreakerCriteria[]
+  maxSubstitutions    Int?             // null = unlimited
+  playersPerTeam      Int
+  minPlayersToStart   Int
+
+  // Registration
+  maxTeams            Int?
+  registrationFee     Float?
+  depositAmount       Float?           // Seña
+
+  // Schedule
+  startDate           DateTime?
+  endDate             DateTime?
+  currentMatchday     Int              @default(0)
+
+  // Teams
+  tournamentTeams     TournamentTeam[]
+
+  // Matches
+  matches             Match[]
+
+  // Payment orders
+  paymentOrders       PaymentOrder[]
+
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@map("tournaments")
+}
+
+model Team {
+  id              String           @id @default(cuid())
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  name            String
+  logoUrl         String?
+  captainPlayerId String?
+
+  // Players
+  teamPlayers     TeamPlayer[]
+
+  // Tournament participations
+  tournamentTeams TournamentTeam[]
+
+  // Matches
+  homeMatches     Match[]          @relation("HomeTeam")
+  awayMatches     Match[]          @relation("AwayTeam")
+
+  // Financial
+  paymentOrders   PaymentOrder[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([tenantId, name])
+  @@map("teams")
+}
+
+model TeamPlayer {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id])
+  playerId  String
+  player    Player   @relation(fields: [playerId], references: [id])
+  shirtNumber Int?
+  isActive  Boolean  @default(true)
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  @@unique([teamId, playerId])
+  @@map("team_players")
+}
+
+model TournamentTeam {
+  id           String     @id @default(cuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  teamId       String
+  team         Team       @relation(fields: [teamId], references: [id])
+
+  // Standings (denormalized for performance)
+  played       Int        @default(0)
+  won          Int        @default(0)
+  drawn        Int        @default(0)
+  lost         Int        @default(0)
+  goalsFor     Int        @default(0)
+  goalsAgainst Int        @default(0)
+  points       Int        @default(0)
+  fairPlaySum  Float      @default(0)
+  fairPlayCount Int       @default(0)
+
+  createdAt    DateTime   @default(now())
+
+  @@unique([tournamentId, teamId])
+  @@map("tournament_teams")
+}
+
+// ============================================================
+// MATCH DAY TABLES
+// ============================================================
+
+model Match {
+  id              String      @id @default(cuid())
+  tournamentId    String
+  tournament      Tournament  @relation(fields: [tournamentId], references: [id])
+  matchday        Int
+  homeTeamId      String
+  homeTeam        Team        @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeamId      String
+  awayTeam        Team        @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  venueId         String?
+  venue           Venue?      @relation(fields: [venueId], references: [id])
+  refereeId       String?
+  referee         Referee?    @relation(fields: [refereeId], references: [id])
+
+  scheduledAt     DateTime?
+  status          MatchStatus @default(SCHEDULED)
+
+  // Scores (set after match data entry)
+  homeScore       Int?
+  awayScore       Int?
+  homeFairPlay    Float?      // 1-5 rating from referee
+  awayFairPlay    Float?      // 1-5 rating from referee
+
+  // Match events
+  lineups         MatchLineup[]
+  goals           Goal[]
+  cards           Card[]
+  substitutions   Substitution[]
+  incidents       String?
+
+  // Financial
+  paymentOrders   PaymentOrder[]
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("matches")
+}
+
+model MatchLineup {
+  id        String @id @default(cuid())
+  matchId   String
+  match     Match  @relation(fields: [matchId], references: [id])
+  playerId  String
+  player    Player @relation(fields: [playerId], references: [id])
+  teamId    String
+  isStarter Boolean @default(true)
+
+  @@unique([matchId, playerId])
+  @@map("match_lineups")
+}
+
+model Goal {
+  id             String  @id @default(cuid())
+  matchId        String
+  match          Match   @relation(fields: [matchId], references: [id])
+  playerId       String
+  player         Player  @relation(fields: [playerId], references: [id])
+  assistPlayerId String?
+  assistPlayer   Player? @relation("AssistPlayer", fields: [assistPlayerId], references: [id])
+  teamId         String
+  minute         Int
+
+  @@map("goals")
+}
+
+model Card {
+  id       String   @id @default(cuid())
+  matchId  String
+  match    Match    @relation(fields: [matchId], references: [id])
+  playerId String
+  player   Player   @relation(fields: [playerId], references: [id])
+  teamId   String
+  type     CardType
+  minute   Int
+  reason   String?
+
+  @@map("cards")
+}
+
+model Substitution {
+  id          String @id @default(cuid())
+  matchId     String
+  match       Match  @relation(fields: [matchId], references: [id])
+  playerOutId String
+  playerOut   Player @relation("PlayerOut", fields: [playerOutId], references: [id])
+  playerInId  String
+  playerIn    Player @relation("PlayerIn", fields: [playerInId], references: [id])
+  teamId      String
+  minute      Int
+
+  @@map("substitutions")
+}
+
+// ============================================================
+// SANCTIONS / TRIBUNAL
+// ============================================================
+
+model Sanction {
+  id              String           @id @default(cuid())
+  tenantId        String           // Liga where sanction applies
+  playerId        String
+  player          Player           @relation(fields: [playerId], references: [id])
+  matchId         String?
+  severity        SanctionSeverity
+  status          SanctionStatus   @default(AUTO_APPLIED)
+  reason          String
+  matchesSuspended Int             @default(1)
+  matchesServed   Int              @default(0)
+  isActive        Boolean          @default(true)
+
+  // Tribunal
+  tribunalNotes   String?
+  resolvedBy      String?          // userId of tribunal member
+  resolvedAt      DateTime?
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("sanctions")
+}
+
+// ============================================================
+// FINANCIAL / SMART TREASURY
+// ============================================================
+
+model PaymentOrder {
+  id            String        @id @default(cuid())
+  tenantId      String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  teamId        String
+  team          Team          @relation(fields: [teamId], references: [id])
+  tournamentId  String
+  tournament    Tournament    @relation(fields: [tournamentId], references: [id])
+  matchId       String?
+  match         Match?        @relation(fields: [matchId], references: [id])
+
+  amount        Float
+  currency      String        @default("UYU")
+  status        PaymentStatus @default(PENDING)
+  isDeposit     Boolean       @default(false) // seña
+  description   String?
+
+  // Payment gateway
+  externalPaymentId String?   // MercadoPago/Stripe ID
+  gatewayFee    Float?
+  aufaCommission Float?
+  leagueAmount  Float?
+
+  dueDate       DateTime
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("payment_orders")
+}
+
+model SubscriptionInvoice {
+  id        String        @id @default(cuid())
+  tenantId  String
+  tenant    Tenant        @relation(fields: [tenantId], references: [id])
+  amount    Float
+  currency  String        @default("USD")
+  period    String        // e.g., "2024-01"
+  status    PaymentStatus @default(PENDING)
+  dueDate   DateTime
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@map("subscription_invoices")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  SUPER_ADMIN
+  PLAYER
+  REFEREE
+}
+
+enum TenantRole {
+  ADMIN
+  OPERATOR
+}
+
+enum SubscriptionPlan {
+  BARRIO
+  LIGA_PRO
+  ENTERPRISE
+}
+
+enum IdentityValidationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum GameType {
+  F5
+  F7
+  F11
+}
+
+enum TournamentStatus {
+  DRAFT
+  REGISTRATION
+  IN_PROGRESS
+  FINISHED
+  CANCELLED
+}
+
+enum TiebreakerCriteria {
+  GOAL_DIFFERENCE
+  GOALS_FOR
+  HEAD_TO_HEAD
+  FAIR_PLAY
+}
+
+enum MatchStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  SUSPENDED
+  DEFAULT_HOME
+  DEFAULT_AWAY
+}
+
+enum CardType {
+  YELLOW
+  RED
+}
+
+enum SanctionSeverity {
+  LIGHT
+  GRAVE
+}
+
+enum SanctionStatus {
+  AUTO_APPLIED
+  PENDING_TRIBUNAL
+  RESOLVED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  DEFAULTED
+}

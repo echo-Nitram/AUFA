@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Default AUFA branding - overridden by tenant config */
+  --color-primary: #1a56db;
+  --color-primary-light: #3b82f6;
+  --color-secondary: #1e3a5f;
+  --color-accent: #f59e0b;
+  --color-background: #ffffff;
+  --color-text: #111827;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white px-6 py-2.5 rounded-lg font-medium
+           hover:opacity-90 transition-opacity focus:outline-none focus:ring-2
+           focus:ring-primary focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-white px-6 py-2.5 rounded-lg font-medium
+           hover:opacity-90 transition-opacity;
+  }
+
+  .btn-accent {
+    @apply bg-accent text-white px-6 py-2.5 rounded-lg font-medium
+           hover:opacity-90 transition-opacity;
+  }
+
+  .btn-outline {
+    @apply border-2 border-primary text-primary px-6 py-2.5 rounded-lg font-medium
+           hover:bg-primary hover:text-white transition-colors;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2.5 border border-gray-300 rounded-lg
+           focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent
+           placeholder-gray-400;
+  }
+
+  .stat-card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6
+           flex flex-col items-center justify-center text-center;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-info {
+    @apply badge bg-blue-100 text-blue-800;
+  }
+
+  .table-container {
+    @apply overflow-x-auto rounded-xl border border-gray-200;
+  }
+
+  .standings-table {
+    @apply w-full text-sm;
+  }
+
+  .standings-table th {
+    @apply bg-gray-50 px-4 py-3 text-left font-semibold text-gray-600 uppercase text-xs tracking-wider;
+  }
+
+  .standings-table td {
+    @apply px-4 py-3 border-t border-gray-100;
+  }
+
+  .standings-table tr:hover td {
+    @apply bg-gray-50;
+  }
+}

@@ -99,6 +99,8 @@ export const matchApi = {
     apiFetch(`/api/matches/${matchId}/rosters`, { tenantId, token }),
   enterMatchData: (tenantId: string, token: string, matchId: string, data: any) =>
     apiFetch(`/api/matches/${matchId}/data`, { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
+  assignVenue: (tenantId: string, token: string, matchId: string, venueId: string | null) =>
+    apiFetch(`/api/matches/${matchId}/venue`, { tenantId, token, method: 'PUT', body: JSON.stringify({ venueId }) }),
 };
 
 // Fixture

@@ -5,6 +5,12 @@ import { useTenant } from '@/lib/tenant-context';
 import { useAuth } from '@/lib/auth-context';
 import { leagueApi, matchApi } from '@/lib/api';
 
+interface Venue {
+  id: string;
+  name: string;
+  address: string | null;
+}
+
 interface RosterPlayer {
   playerId: string;
   aufaId: string;
@@ -34,6 +40,10 @@ export default function MatchesPage() {
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
 
+  // Venues
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [changingVenue, setChangingVenue] = useState<string | null>(null); // matchId being edited
+
   // Lineup selection
   const [homeLineup, setHomeLineup] = useState<Set<string>>(new Set());
   const [awayLineup, setAwayLineup] = useState<Set<string>>(new Set());
@@ -55,6 +65,7 @@ export default function MatchesPage() {
       setTournaments(data);
       if (data.length > 0) setSelectedTournament(data[0].id);
     }).catch(console.error).finally(() => setIsLoading(false));
+    leagueApi.listVenues(tenantId).then(setVenues).catch(console.error);
   }, [tenantId]);
 
   useEffect(() => {
@@ -201,6 +212,19 @@ export default function MatchesPage() {
       setMsgType('success');
       setEditingMatch(null);
       setRosters(null);
+      matchApi.listByTournament(tenantId, selectedTournament).then(setMatches);
+    } catch (err: any) {
+      setMsg(err.message);
+      setMsgType('error');
+    }
+  }
+
+  async function handleVenueChange(matchId: string, venueId: string) {
+    if (!tenantId || !token) return;
+    try {
+      await matchApi.assignVenue(tenantId, token, matchId, venueId || null);
+      setChangingVenue(null);
+      // Refresh matches
       matchApi.listByTournament(tenantId, selectedTournament).then(setMatches);
     } catch (err: any) {
       setMsg(err.message);
@@ -552,7 +576,36 @@ export default function MatchesPage() {
                         )}
                       </div>
                     </div>
-                    {match.venue && <p className="text-xs text-gray-400 mt-2">{match.venue.name}</p>}
+                    {/* Venue assignment */}
+                    <div className="mt-2 flex items-center gap-2">
+                      {changingVenue === match.id ? (
+                        <>
+                          <select
+                            className="input-field text-xs py-1 w-48"
+                            defaultValue={match.venue?.id || ''}
+                            onChange={e => handleVenueChange(match.id, e.target.value)}
+                            autoFocus
+                          >
+                            <option value="">Sin cancha</option>
+                            {venues.map(v => (
+                              <option key={v.id} value={v.id}>{v.name}</option>
+                            ))}
+                          </select>
+                          <button className="text-xs text-gray-400 hover:text-gray-600"
+                            onClick={() => setChangingVenue(null)}>Cancelar</button>
+                        </>
+                      ) : (
+                        <button
+                          className="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1"
+                          onClick={() => setChangingVenue(match.id)}
+                        >
+                          {match.venue
+                            ? <><span>{match.venue.name}</span><span className="text-gray-300">| Cambiar</span></>
+                            : <span className="text-amber-500">+ Asignar cancha</span>
+                          }
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

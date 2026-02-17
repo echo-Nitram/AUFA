@@ -20,6 +20,9 @@ router.post('/:id/data', authenticate, requireTenantAdmin, matchController.enter
 // Assign referee
 router.put('/:id/referee', authenticate, requireTenantAdmin, matchController.assignReferee);
 
+// Assign/change venue
+router.put('/:id/venue', authenticate, requireTenantAdmin, matchController.assignVenue);
+
 // Get match stats summary
 router.get('/:id/stats', matchController.getMatchStats);
 

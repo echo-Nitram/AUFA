@@ -491,6 +491,28 @@ export async function assignReferee(req: AuthRequest, res: Response) {
   }
 }
 
+export async function assignVenue(req: AuthRequest, res: Response) {
+  try {
+    const { venueId } = req.body;
+
+    const match = await prisma.match.update({
+      where: { id: req.params.id },
+      data: { venueId: venueId || null },
+      include: { venue: { select: { name: true } } },
+    });
+
+    res.json({
+      message: venueId
+        ? `Cancha "${match.venue?.name}" asignada al partido`
+        : 'Cancha removida del partido',
+      match,
+    });
+  } catch (error) {
+    console.error('AssignVenue error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
 export async function getMatchStats(req: AuthRequest, res: Response) {
   try {
     const matchId = req.params.id;

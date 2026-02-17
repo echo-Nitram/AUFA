@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useTenant } from '@/lib/tenant-context';
 import { useAuth } from '@/lib/auth-context';
-import { adminApi } from '@/lib/api';
+import { adminApi, uploadApi } from '@/lib/api';
 
 interface Member {
   id: string;
@@ -42,6 +42,8 @@ export default function AdminPage() {
     name: '', primaryColor: '', secondaryColor: '', accentColor: '', backgroundColor: '', textColor: '',
   });
   const [brandingMsg, setBrandingMsg] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!tenantId || !token) return;
@@ -111,6 +113,25 @@ export default function AdminPage() {
       setBrandingMsg('Configuracion guardada');
       loadSettings();
     } catch (err: any) { setBrandingMsg(err.message); }
+  }
+
+  async function handleLogoUpload() {
+    const file = logoRef.current?.files?.[0];
+    if (!file || !token || !tenantId) return;
+    setUploadingLogo(true);
+    setBrandingMsg('');
+    try {
+      const result = await uploadApi.uploadLogo(token, file);
+      // Save the logo URL to tenant settings
+      await adminApi.updateSettings(tenantId, token, { logoUrl: result.url });
+      setBrandingMsg('Logo actualizado');
+      loadSettings();
+    } catch (err: any) {
+      setBrandingMsg(err.message);
+    } finally {
+      setUploadingLogo(false);
+      if (logoRef.current) logoRef.current.value = '';
+    }
   }
 
   return (
@@ -230,6 +251,29 @@ export default function AdminPage() {
                 <p className="text-sm text-gray-500 mt-1">Portal publico: <a href={`/liga/${settings.slug}`} className="text-primary hover:underline">/liga/{settings.slug}</a></p>
               </div>
             )}
+
+            {/* Logo Upload */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Logo de la Liga</h3>
+              <div className="flex items-center gap-4">
+                {settings?.logoUrl ? (
+                  <img src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${settings.logoUrl}`}
+                    alt="Logo" className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
+                ) : (
+                  <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xl font-bold">
+                    {settings?.name?.[0] || '?'}
+                  </div>
+                )}
+                <div className="flex-1">
+                  <input ref={logoRef} type="file" accept="image/jpeg,image/png,image/webp"
+                    className="text-sm w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
+                  <p className="text-xs text-gray-400 mt-1">JPG, PNG o WebP. Maximo 5MB.</p>
+                </div>
+                <button type="button" className="btn-primary text-sm" onClick={handleLogoUpload} disabled={uploadingLogo}>
+                  {uploadingLogo ? 'Subiendo...' : 'Subir Logo'}
+                </button>
+              </div>
+            </div>
 
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Colores de Marca</h3>

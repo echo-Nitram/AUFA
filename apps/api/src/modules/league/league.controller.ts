@@ -455,3 +455,21 @@ export async function updateVenue(req: AuthRequest, res: Response) {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 }
+
+export async function deleteVenue(req: AuthRequest, res: Response) {
+  try {
+    // Unlink matches from this venue first
+    await prisma.match.updateMany({
+      where: { venueId: req.params.id },
+      data: { venueId: null },
+    });
+
+    await prisma.venueSlot.deleteMany({ where: { venueId: req.params.id } });
+    await prisma.venue.delete({ where: { id: req.params.id } });
+
+    res.json({ message: 'Cancha eliminada' });
+  } catch (error) {
+    console.error('DeleteVenue error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}

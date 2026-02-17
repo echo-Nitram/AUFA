@@ -14,6 +14,16 @@ router.post('/register', authenticate, refereeController.registerAsReferee);
 router.put('/profile', authenticate, refereeController.updateRefereeProfile);
 router.put('/availability', authenticate, refereeController.updateAvailability);
 
+// Admin: register referee by email
+router.post(
+  '/register-by-admin',
+  authenticate,
+  resolveTenant,
+  requireTenant,
+  requireTenantAdmin,
+  refereeController.registerRefereeByAdmin
+);
+
 // League: hire referees
 router.post(
   '/hire',

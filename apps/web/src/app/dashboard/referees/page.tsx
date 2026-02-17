@@ -43,7 +43,7 @@ export default function RefereesPage() {
   const { tenantId } = useTenant();
   const { token } = useAuth();
 
-  const [tab, setTab] = useState<'marketplace' | 'assignments'>('marketplace');
+  const [tab, setTab] = useState<'marketplace' | 'assignments' | 'register'>('marketplace');
 
   // Marketplace state
   const [referees, setReferees] = useState<Referee[]>([]);
@@ -59,6 +59,12 @@ export default function RefereesPage() {
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState('');
   const [loadingMatches, setLoadingMatches] = useState(false);
+
+  // Register form
+  const [regForm, setRegForm] = useState({ email: '', fullName: '', phone: '', certifications: '' });
+  const [regMsg, setRegMsg] = useState('');
+  const [regMsgType, setRegMsgType] = useState<'success' | 'error'>('success');
+  const [registering, setRegistering] = useState(false);
 
   // Load referees
   useEffect(() => {
@@ -131,6 +137,32 @@ export default function RefereesPage() {
 
   const unassignedMatches = matches.filter(m => !m.referee && m.status === 'SCHEDULED');
 
+  async function handleRegisterReferee(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tenantId || !token) return;
+    setRegMsg('');
+    setRegistering(true);
+    try {
+      const certs = regForm.certifications.split(',').map(c => c.trim()).filter(Boolean);
+      const result = await refereeApi.registerByAdmin(tenantId, token, {
+        email: regForm.email,
+        fullName: regForm.fullName,
+        phone: regForm.phone || undefined,
+        certifications: certs,
+      });
+      setRegMsg(result.message);
+      setRegMsgType('success');
+      setRegForm({ email: '', fullName: '', phone: '', certifications: '' });
+      // Refresh referee list
+      refereeApi.listAvailable().then(setReferees);
+    } catch (err: any) {
+      setRegMsg(err.message);
+      setRegMsgType('error');
+    } finally {
+      setRegistering(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Arbitros</h1>
@@ -152,6 +184,14 @@ export default function RefereesPage() {
           onClick={() => setTab('assignments')}
         >
           Asignaciones
+        </button>
+        <button
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            tab === 'register' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+          onClick={() => setTab('register')}
+        >
+          Registrar Arbitro
         </button>
       </div>
 
@@ -473,6 +513,53 @@ export default function RefereesPage() {
                 ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Register Tab */}
+      {tab === 'register' && (
+        <div className="max-w-lg">
+          {regMsg && (
+            <div className={`mb-4 p-3 rounded-lg text-sm ${regMsgType === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+              {regMsg}
+            </div>
+          )}
+
+          <form onSubmit={handleRegisterReferee} className="card space-y-4">
+            <h3 className="font-semibold text-gray-900 mb-2">Registrar Nuevo Arbitro</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Se crea una cuenta con contrasena temporal que el arbitro podra cambiar.
+            </p>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+              <input type="text" className="input-field" placeholder="Carlos Perez" required
+                value={regForm.fullName} onChange={e => setRegForm(p => ({ ...p, fullName: e.target.value }))} />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" className="input-field" placeholder="arbitro@email.com" required
+                value={regForm.email} onChange={e => setRegForm(p => ({ ...p, email: e.target.value }))} />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Telefono</label>
+              <input type="text" className="input-field" placeholder="099 123 456"
+                value={regForm.phone} onChange={e => setRegForm(p => ({ ...p, phone: e.target.value }))} />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Certificaciones</label>
+              <input type="text" className="input-field" placeholder="Nacional, FIFA (separar con comas)"
+                value={regForm.certifications} onChange={e => setRegForm(p => ({ ...p, certifications: e.target.value }))} />
+              <p className="text-xs text-gray-400 mt-1">Separa las certificaciones con comas</p>
+            </div>
+
+            <button type="submit" className="btn-primary w-full" disabled={registering}>
+              {registering ? 'Registrando...' : 'Registrar Arbitro'}
+            </button>
+          </form>
         </div>
       )}
     </div>

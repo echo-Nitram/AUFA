@@ -84,6 +84,10 @@ export const leagueApi = {
   listVenues: (tenantId: string) => apiFetch('/api/league/venues', { tenantId }),
   createVenue: (tenantId: string, token: string, data: any) =>
     apiFetch('/api/league/venues', { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
+  updateVenue: (tenantId: string, token: string, venueId: string, data: any) =>
+    apiFetch(`/api/league/venues/${venueId}`, { tenantId, token, method: 'PUT', body: JSON.stringify(data) }),
+  deleteVenue: (tenantId: string, token: string, venueId: string) =>
+    apiFetch(`/api/league/venues/${venueId}`, { tenantId, token, method: 'DELETE' }),
 };
 
 // Match
@@ -149,6 +153,10 @@ export const refereeApi = {
   listAvailable: (dayOfWeek?: number) =>
     apiFetch(`/api/referees/available${dayOfWeek !== undefined ? `?dayOfWeek=${dayOfWeek}` : ''}`),
   getProfile: (id: string) => apiFetch(`/api/referees/${id}`),
+  register: (token: string, data: any) =>
+    apiFetch('/api/referees/register', { token, method: 'POST', body: JSON.stringify(data) }),
+  registerByAdmin: (tenantId: string, token: string, data: any) =>
+    apiFetch('/api/referees/register-by-admin', { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
   hire: (tenantId: string, token: string, refereeId: string, matchIds: string[]) =>
     apiFetch('/api/referees/hire', { tenantId, token, method: 'POST', body: JSON.stringify({ refereeId, matchIds }) }),
   listMatchesByTournament: (tenantId: string, tournamentId: string) =>

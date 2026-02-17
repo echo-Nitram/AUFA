@@ -33,5 +33,6 @@ router.post('/tournaments/:tournamentId/register/:teamId', authenticate, require
 router.post('/venues', authenticate, requireTenantAdmin, leagueController.createVenue);
 router.get('/venues', leagueController.listVenues);
 router.put('/venues/:id', authenticate, requireTenantAdmin, leagueController.updateVenue);
+router.delete('/venues/:id', authenticate, requireTenantAdmin, leagueController.deleteVenue);
 
 export default router;

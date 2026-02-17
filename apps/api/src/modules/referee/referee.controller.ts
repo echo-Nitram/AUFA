@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/database';
 import { AuthRequest } from '../../middleware/auth';
 
@@ -176,6 +177,63 @@ export async function hireReferee(req: AuthRequest, res: Response) {
     });
   } catch (error) {
     console.error('HireReferee error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+/**
+ * Admin registers a new referee by providing email + name.
+ * Creates user if doesn't exist, creates referee record.
+ */
+export async function registerRefereeByAdmin(req: AuthRequest, res: Response) {
+  try {
+    const { email, fullName, phone, certifications } = req.body;
+
+    if (!email || !fullName) {
+      return res.status(400).json({ error: 'Email y nombre son requeridos' });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Find or create user
+      let user = await tx.user.findUnique({ where: { email } });
+      if (!user) {
+        const passwordHash = await bcrypt.hash('referee123', 12);
+        user = await tx.user.create({
+          data: { email, passwordHash, role: 'REFEREE' },
+        });
+      } else {
+        // Update role if not already referee
+        if (user.role !== 'REFEREE') {
+          await tx.user.update({ where: { id: user.id }, data: { role: 'REFEREE' } });
+        }
+      }
+
+      // Check if already a referee
+      const existing = await tx.referee.findUnique({ where: { userId: user.id } });
+      if (existing) {
+        return { referee: existing, created: false };
+      }
+
+      const referee = await tx.referee.create({
+        data: {
+          userId: user.id,
+          fullName,
+          phone: phone || null,
+          certifications: certifications || [],
+        },
+      });
+
+      return { referee, created: true };
+    });
+
+    res.status(result.created ? 201 : 200).json({
+      message: result.created
+        ? `Arbitro ${fullName} registrado. Contrasena temporal: referee123`
+        : `${fullName} ya estaba registrado como arbitro`,
+      referee: result.referee,
+    });
+  } catch (error) {
+    console.error('RegisterRefereeByAdmin error:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 }

@@ -65,6 +65,8 @@ export const matchApi = {
   listByTournament: (tenantId: string, tournamentId: string) =>
     apiFetch(`/api/matches/tournament/${tournamentId}`, { tenantId }),
   getMatch: (tenantId: string, id: string) => apiFetch(`/api/matches/${id}`, { tenantId }),
+  getRosters: (tenantId: string, token: string, matchId: string) =>
+    apiFetch(`/api/matches/${matchId}/rosters`, { tenantId, token }),
   enterMatchData: (tenantId: string, token: string, matchId: string, data: any) =>
     apiFetch(`/api/matches/${matchId}/data`, { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
 };
@@ -102,6 +104,7 @@ export const tribunalApi = {
 
 // Stats
 export const statsApi = {
+  dashboard: (tenantId: string) => apiFetch(`/api/stats/dashboard`, { tenantId }),
   topScorers: (tenantId: string, tournamentId: string) => apiFetch(`/api/stats/scorers/${tournamentId}`, { tenantId }),
   cardsLeaders: (tenantId: string, tournamentId: string) => apiFetch(`/api/stats/cards/${tournamentId}`, { tenantId }),
   fairPlay: (tenantId: string, tournamentId: string) => apiFetch(`/api/stats/fairplay/${tournamentId}`, { tenantId }),

@@ -2,6 +2,74 @@ import { Response } from 'express';
 import { prisma } from '../../config/database';
 import { AuthRequest } from '../../middleware/auth';
 
+export async function getDashboardSummary(req: AuthRequest, res: Response) {
+  try {
+    const tenantId = req.tenantId!;
+
+    const [tournaments, teams, players, nextMatch, activeSanctions] = await Promise.all([
+      prisma.tournament.findMany({
+        where: { tenantId, status: { in: ['REGISTRATION', 'IN_PROGRESS'] } },
+        select: { id: true, name: true, status: true },
+      }),
+      prisma.team.count({ where: { tenantId } }),
+      prisma.teamPlayer.count({
+        where: { team: { tenantId }, isActive: true },
+      }),
+      prisma.match.findFirst({
+        where: {
+          tournament: { tenantId },
+          status: 'SCHEDULED',
+        },
+        orderBy: { scheduledAt: 'asc' },
+        include: {
+          homeTeam: { select: { name: true } },
+          awayTeam: { select: { name: true } },
+          venue: { select: { name: true } },
+        },
+      }),
+      prisma.sanction.count({
+        where: { tenantId, isActive: true },
+      }),
+    ]);
+
+    // Count scheduled matches per matchday to find the "next" matchday
+    let nextMatchday: number | null = null;
+    if (nextMatch) {
+      nextMatchday = nextMatch.matchday;
+    }
+
+    // Count completed vs total matches
+    const [completedMatches, totalMatches] = await Promise.all([
+      prisma.match.count({
+        where: { tournament: { tenantId }, status: 'COMPLETED' },
+      }),
+      prisma.match.count({
+        where: { tournament: { tenantId } },
+      }),
+    ]);
+
+    res.json({
+      activeTournaments: tournaments.length,
+      tournaments: tournaments.map(t => ({ id: t.id, name: t.name, status: t.status })),
+      totalTeams: teams,
+      totalPlayers: players,
+      nextMatchday,
+      nextMatch: nextMatch ? {
+        id: nextMatch.id,
+        home: nextMatch.homeTeam.name,
+        away: nextMatch.awayTeam.name,
+        venue: nextMatch.venue?.name,
+        scheduledAt: nextMatch.scheduledAt,
+      } : null,
+      matchProgress: { completed: completedMatches, total: totalMatches },
+      activeSanctions,
+    });
+  } catch (error) {
+    console.error('GetDashboardSummary error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
 export async function getTopScorers(req: AuthRequest, res: Response) {
   try {
     const { tournamentId } = req.params;

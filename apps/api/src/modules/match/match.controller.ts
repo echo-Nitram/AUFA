@@ -117,6 +117,91 @@ export async function enterMatchData(req: AuthRequest, res: Response) {
       return res.status(400).json({ error: 'Los datos de este partido ya fueron cargados' });
     }
 
+    // Validate lineup players are eligible
+    const allLineupIds = [...data.homeLineup, ...data.awayLineup];
+    if (allLineupIds.length > 0) {
+      // Check all players belong to their respective teams
+      const [homeRoster, awayRoster] = await Promise.all([
+        prisma.teamPlayer.findMany({
+          where: { teamId: match.homeTeamId, isActive: true },
+          select: { playerId: true },
+        }),
+        prisma.teamPlayer.findMany({
+          where: { teamId: match.awayTeamId, isActive: true },
+          select: { playerId: true },
+        }),
+      ]);
+      const homeIds = new Set(homeRoster.map(r => r.playerId));
+      const awayIds = new Set(awayRoster.map(r => r.playerId));
+
+      for (const pid of data.homeLineup) {
+        if (!homeIds.has(pid)) {
+          return res.status(400).json({ error: `Jugador ${pid} no pertenece al equipo local` });
+        }
+      }
+      for (const pid of data.awayLineup) {
+        if (!awayIds.has(pid)) {
+          return res.status(400).json({ error: `Jugador ${pid} no pertenece al equipo visitante` });
+        }
+      }
+
+      // Check active sanctions
+      const activeSanctions = await prisma.sanction.findMany({
+        where: {
+          tenantId: match.tournament.tenantId,
+          playerId: { in: allLineupIds },
+          isActive: true,
+        },
+        include: { player: { select: { fullName: true } } },
+      });
+
+      const blocked = activeSanctions.filter(
+        s => s.matchesServed < s.matchesSuspended || s.status === 'PENDING_TRIBUNAL'
+      );
+      if (blocked.length > 0) {
+        return res.status(400).json({
+          error: 'Hay jugadores sancionados en la alineación',
+          players: blocked.map(s => ({
+            name: s.player.fullName,
+            reason: s.status === 'PENDING_TRIBUNAL'
+              ? 'Pendiente tribunal'
+              : `Suspendido: ${s.matchesSuspended - s.matchesServed} fecha(s) - ${s.reason}`,
+          })),
+        });
+      }
+
+      // Check medical clearances
+      const players = await prisma.player.findMany({
+        where: { id: { in: allLineupIds } },
+        include: {
+          medicalClearances: {
+            where: { isActive: true, expiresAt: { gte: new Date() } },
+            take: 1,
+          },
+        },
+      });
+
+      const noMedical = players.filter(p => p.medicalClearances.length === 0);
+      if (noMedical.length > 0) {
+        return res.status(400).json({
+          error: 'Hay jugadores sin ficha médica vigente',
+          players: noMedical.map(p => ({ name: p.fullName, reason: 'Sin ficha médica vigente' })),
+        });
+      }
+    }
+
+    // Validate goal/card player IDs are in lineup
+    for (const goal of data.goals) {
+      if (!allLineupIds.includes(goal.playerId)) {
+        return res.status(400).json({ error: `Goleador ${goal.playerId} no está en la alineación` });
+      }
+    }
+    for (const card of data.cards) {
+      if (!allLineupIds.includes(card.playerId)) {
+        return res.status(400).json({ error: `Jugador tarjeteado ${card.playerId} no está en la alineación` });
+      }
+    }
+
     await prisma.$transaction(async (tx) => {
       // 1. Update match scores and status
       await tx.match.update({
@@ -263,6 +348,128 @@ export async function enterMatchData(req: AuthRequest, res: Response) {
       return res.status(400).json({ error: 'Datos inválidos', details: error.errors });
     }
     console.error('EnterMatchData error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+/**
+ * Get both teams' rosters for a match, with eligibility status per player.
+ * Used by the frontend lineup selection UI.
+ */
+export async function getMatchRosters(req: AuthRequest, res: Response) {
+  try {
+    const match = await prisma.match.findFirst({
+      where: { id: req.params.id },
+      include: {
+        homeTeam: { select: { id: true, name: true } },
+        awayTeam: { select: { id: true, name: true } },
+        tournament: { select: { tenantId: true } },
+      },
+    });
+
+    if (!match) {
+      return res.status(404).json({ error: 'Partido no encontrado' });
+    }
+
+    const tenantId = match.tournament.tenantId;
+
+    // Get both teams' active players
+    const [homePlayers, awayPlayers] = await Promise.all([
+      prisma.teamPlayer.findMany({
+        where: { teamId: match.homeTeamId, isActive: true },
+        include: {
+          player: {
+            select: {
+              id: true, aufaId: true, fullName: true, photoUrl: true,
+              identityStatus: true,
+              medicalClearances: {
+                where: { isActive: true },
+                orderBy: { expiresAt: 'desc' },
+                take: 1,
+              },
+            },
+          },
+        },
+      }),
+      prisma.teamPlayer.findMany({
+        where: { teamId: match.awayTeamId, isActive: true },
+        include: {
+          player: {
+            select: {
+              id: true, aufaId: true, fullName: true, photoUrl: true,
+              identityStatus: true,
+              medicalClearances: {
+                where: { isActive: true },
+                orderBy: { expiresAt: 'desc' },
+                take: 1,
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    // Get active sanctions for all players in this tenant
+    const allPlayerIds = [...homePlayers, ...awayPlayers].map(tp => tp.playerId);
+    const activeSanctions = await prisma.sanction.findMany({
+      where: {
+        tenantId,
+        playerId: { in: allPlayerIds },
+        isActive: true,
+      },
+    });
+
+    const sanctionMap = new Map<string, typeof activeSanctions[0]>();
+    for (const s of activeSanctions) {
+      if (s.matchesServed < s.matchesSuspended || s.status === 'PENDING_TRIBUNAL') {
+        sanctionMap.set(s.playerId, s);
+      }
+    }
+
+    function mapPlayer(tp: typeof homePlayers[0]) {
+      const p = tp.player;
+      const sanction = sanctionMap.get(p.id);
+      const hasMedical = p.medicalClearances.length > 0 &&
+        new Date(p.medicalClearances[0].expiresAt) >= new Date();
+      const isIdentityOk = p.identityStatus === 'APPROVED';
+
+      const reasons: string[] = [];
+      if (sanction) {
+        if (sanction.status === 'PENDING_TRIBUNAL') {
+          reasons.push('Pendiente tribunal');
+        } else {
+          reasons.push(`Suspendido: ${sanction.matchesSuspended - sanction.matchesServed} fecha(s)`);
+        }
+      }
+      if (!hasMedical) reasons.push('Sin ficha médica vigente');
+      if (!isIdentityOk) reasons.push(`Identidad: ${p.identityStatus}`);
+
+      return {
+        playerId: p.id,
+        aufaId: p.aufaId,
+        fullName: p.fullName,
+        photoUrl: p.photoUrl,
+        shirtNumber: tp.shirtNumber,
+        eligible: reasons.length === 0,
+        reasons,
+      };
+    }
+
+    res.json({
+      matchId: match.id,
+      home: {
+        teamId: match.homeTeamId,
+        teamName: match.homeTeam.name,
+        players: homePlayers.map(mapPlayer),
+      },
+      away: {
+        teamId: match.awayTeamId,
+        teamName: match.awayTeam.name,
+        players: awayPlayers.map(mapPlayer),
+      },
+    });
+  } catch (error) {
+    console.error('GetMatchRosters error:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 }

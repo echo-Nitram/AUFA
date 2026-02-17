@@ -5,6 +5,22 @@ import { useTenant } from '@/lib/tenant-context';
 import { useAuth } from '@/lib/auth-context';
 import { leagueApi, matchApi } from '@/lib/api';
 
+interface RosterPlayer {
+  playerId: string;
+  aufaId: string;
+  fullName: string;
+  photoUrl: string | null;
+  shirtNumber: number | null;
+  eligible: boolean;
+  reasons: string[];
+}
+
+interface MatchRosters {
+  matchId: string;
+  home: { teamId: string; teamName: string; players: RosterPlayer[] };
+  away: { teamId: string; teamName: string; players: RosterPlayer[] };
+}
+
 export default function MatchesPage() {
   const { tenantId } = useTenant();
   const { token } = useAuth();
@@ -13,18 +29,25 @@ export default function MatchesPage() {
   const [matches, setMatches] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingMatch, setEditingMatch] = useState<any>(null);
+  const [rosters, setRosters] = useState<MatchRosters | null>(null);
+  const [rostersLoading, setRostersLoading] = useState(false);
   const [msg, setMsg] = useState('');
+  const [msgType, setMsgType] = useState<'success' | 'error'>('success');
 
-  // Match data entry form state
+  // Lineup selection
+  const [homeLineup, setHomeLineup] = useState<Set<string>>(new Set());
+  const [awayLineup, setAwayLineup] = useState<Set<string>>(new Set());
+
+  // Match data
   const [matchData, setMatchData] = useState({
-    homeScore: 0, awayScore: 0, homeFairPlay: 4, awayFairPlay: 4,
-    homeLineup: [] as string[], awayLineup: [] as string[],
-    goals: [] as any[], cards: [] as any[], substitutions: [] as any[], incidents: '',
+    homeScore: 0, awayScore: 0, homeFairPlay: 4, awayFairPlay: 4, incidents: '',
   });
+  const [goals, setGoals] = useState<any[]>([]);
+  const [cards, setCards] = useState<any[]>([]);
 
   // Temp state for adding goals/cards
-  const [newGoal, setNewGoal] = useState({ playerName: '', teamSide: 'home', minute: 1 });
-  const [newCard, setNewCard] = useState({ playerName: '', teamSide: 'home', minute: 1, type: 'YELLOW' as 'YELLOW' | 'RED', reason: '' });
+  const [newGoal, setNewGoal] = useState({ playerId: '', minute: 1, assistPlayerId: '' });
+  const [newCard, setNewCard] = useState({ playerId: '', minute: 1, type: 'YELLOW' as 'YELLOW' | 'RED', reason: '' });
 
   useEffect(() => {
     if (!tenantId) return;
@@ -39,66 +62,150 @@ export default function MatchesPage() {
     matchApi.listByTournament(tenantId, selectedTournament).then(setMatches).catch(console.error);
   }, [tenantId, selectedTournament]);
 
-  function openMatchEntry(match: any) {
+  async function openMatchEntry(match: any) {
     setEditingMatch(match);
-    setMatchData({
-      homeScore: 0, awayScore: 0, homeFairPlay: 4, awayFairPlay: 4,
-      homeLineup: [], awayLineup: [], goals: [], cards: [], substitutions: [], incidents: '',
-    });
+    setRosters(null);
+    setHomeLineup(new Set());
+    setAwayLineup(new Set());
+    setGoals([]);
+    setCards([]);
+    setMatchData({ homeScore: 0, awayScore: 0, homeFairPlay: 4, awayFairPlay: 4, incidents: '' });
     setMsg('');
+
+    if (!tenantId || !token) return;
+    setRostersLoading(true);
+    try {
+      const data = await matchApi.getRosters(tenantId, token, match.id);
+      setRosters(data);
+    } catch (err: any) {
+      setMsg('Error cargando planteles: ' + err.message);
+      setMsgType('error');
+    } finally {
+      setRostersLoading(false);
+    }
+  }
+
+  function togglePlayer(side: 'home' | 'away', playerId: string) {
+    const setter = side === 'home' ? setHomeLineup : setAwayLineup;
+    setter(prev => {
+      const next = new Set(prev);
+      if (next.has(playerId)) next.delete(playerId);
+      else next.add(playerId);
+      return next;
+    });
+  }
+
+  function getLineupPlayers(side: 'home' | 'away'): RosterPlayer[] {
+    if (!rosters) return [];
+    const lineup = side === 'home' ? homeLineup : awayLineup;
+    const teamPlayers = side === 'home' ? rosters.home.players : rosters.away.players;
+    return teamPlayers.filter(p => lineup.has(p.playerId));
+  }
+
+  function getAllLineupPlayers(): (RosterPlayer & { side: 'home' | 'away' })[] {
+    return [
+      ...getLineupPlayers('home').map(p => ({ ...p, side: 'home' as const })),
+      ...getLineupPlayers('away').map(p => ({ ...p, side: 'away' as const })),
+    ];
+  }
+
+  function findPlayerSide(playerId: string): 'home' | 'away' | null {
+    if (homeLineup.has(playerId)) return 'home';
+    if (awayLineup.has(playerId)) return 'away';
+    return null;
   }
 
   function addGoal() {
-    const teamId = newGoal.teamSide === 'home' ? editingMatch.homeTeamId : editingMatch.awayTeamId;
+    if (!newGoal.playerId || !rosters) return;
+    const allPlayers = getAllLineupPlayers();
+    const player = allPlayers.find(p => p.playerId === newGoal.playerId);
+    if (!player) return;
+
+    const teamId = player.side === 'home' ? rosters.home.teamId : rosters.away.teamId;
+    setGoals(prev => [...prev, {
+      playerId: newGoal.playerId,
+      teamId,
+      minute: newGoal.minute,
+      assistPlayerId: newGoal.assistPlayerId || undefined,
+      _name: player.fullName,
+      _side: player.side,
+      _shirt: player.shirtNumber,
+    }]);
     setMatchData(p => ({
       ...p,
-      goals: [...p.goals, { playerId: `temp_${Date.now()}`, teamId, minute: newGoal.minute, _name: newGoal.playerName, _side: newGoal.teamSide }],
-      homeScore: newGoal.teamSide === 'home' ? p.homeScore + 1 : p.homeScore,
-      awayScore: newGoal.teamSide === 'away' ? p.awayScore + 1 : p.awayScore,
+      homeScore: player.side === 'home' ? p.homeScore + 1 : p.homeScore,
+      awayScore: player.side === 'away' ? p.awayScore + 1 : p.awayScore,
     }));
-    setNewGoal({ playerName: '', teamSide: 'home', minute: 1 });
+    setNewGoal({ playerId: '', minute: 1, assistPlayerId: '' });
   }
 
   function removeGoal(idx: number) {
-    const g = matchData.goals[idx];
+    const g = goals[idx];
     setMatchData(p => ({
       ...p,
-      goals: p.goals.filter((_, i) => i !== idx),
       homeScore: g._side === 'home' ? p.homeScore - 1 : p.homeScore,
       awayScore: g._side === 'away' ? p.awayScore - 1 : p.awayScore,
     }));
+    setGoals(prev => prev.filter((_, i) => i !== idx));
   }
 
   function addCard() {
-    const teamId = newCard.teamSide === 'home' ? editingMatch.homeTeamId : editingMatch.awayTeamId;
-    setMatchData(p => ({
-      ...p,
-      cards: [...p.cards, { playerId: `temp_${Date.now()}`, teamId, minute: newCard.minute, type: newCard.type, reason: newCard.reason, _name: newCard.playerName }],
-    }));
-    setNewCard({ playerName: '', teamSide: 'home', minute: 1, type: 'YELLOW', reason: '' });
+    if (!newCard.playerId || !rosters) return;
+    const allPlayers = getAllLineupPlayers();
+    const player = allPlayers.find(p => p.playerId === newCard.playerId);
+    if (!player) return;
+
+    const teamId = player.side === 'home' ? rosters.home.teamId : rosters.away.teamId;
+    setCards(prev => [...prev, {
+      playerId: newCard.playerId,
+      teamId,
+      minute: newCard.minute,
+      type: newCard.type,
+      reason: newCard.reason,
+      _name: player.fullName,
+      _shirt: player.shirtNumber,
+    }]);
+    setNewCard({ playerId: '', minute: 1, type: 'YELLOW', reason: '' });
   }
 
   async function handleSubmitMatch(e: FormEvent) {
     e.preventDefault();
-    if (!tenantId || !token || !editingMatch) return;
+    if (!tenantId || !token || !editingMatch || !rosters) return;
+
+    if (homeLineup.size === 0 || awayLineup.size === 0) {
+      setMsg('Debes seleccionar al menos un jugador por equipo');
+      setMsgType('error');
+      return;
+    }
+
+    setMsg('');
     try {
-      // For the MVP, we send the data with temp playerIds - in production these would be real IDs from lineup selection
       await matchApi.enterMatchData(tenantId, token, editingMatch.id, {
         homeScore: matchData.homeScore,
         awayScore: matchData.awayScore,
         homeFairPlay: matchData.homeFairPlay,
         awayFairPlay: matchData.awayFairPlay,
-        homeLineup: matchData.homeLineup,
-        awayLineup: matchData.awayLineup,
-        goals: matchData.goals.map(g => ({ playerId: g.playerId, teamId: g.teamId, minute: g.minute })),
-        cards: matchData.cards.map(c => ({ playerId: c.playerId, teamId: c.teamId, minute: c.minute, type: c.type, reason: c.reason })),
+        homeLineup: [...homeLineup],
+        awayLineup: [...awayLineup],
+        goals: goals.map(g => ({
+          playerId: g.playerId, teamId: g.teamId, minute: g.minute,
+          ...(g.assistPlayerId && { assistPlayerId: g.assistPlayerId }),
+        })),
+        cards: cards.map(c => ({
+          playerId: c.playerId, teamId: c.teamId, minute: c.minute, type: c.type, reason: c.reason,
+        })),
         substitutions: [],
         incidents: matchData.incidents,
       });
-      setMsg('Datos cargados exitosamente. Posiciones actualizadas.');
+      setMsg('Datos cargados exitosamente. Posiciones y sanciones actualizadas.');
+      setMsgType('success');
       setEditingMatch(null);
+      setRosters(null);
       matchApi.listByTournament(tenantId, selectedTournament).then(setMatches);
-    } catch (err: any) { setMsg(err.message); }
+    } catch (err: any) {
+      setMsg(err.message);
+      setMsgType('error');
+    }
   }
 
   const statusLabels: Record<string, { text: string; cls: string }> = {
@@ -125,106 +232,288 @@ export default function MatchesPage() {
         )}
       </div>
 
-      {msg && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm">{msg}</div>}
-
-      {/* Match Data Entry Modal */}
-      {editingMatch && (
-        <div className="card mb-6 border-2 border-primary">
-          <h3 className="font-bold text-lg mb-4">Cargar Datos: {editingMatch.homeTeam?.name} vs {editingMatch.awayTeam?.name}</h3>
-          <form onSubmit={handleSubmitMatch} className="space-y-6">
-            {/* Score */}
-            <div className="flex items-center justify-center gap-6">
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-600 mb-1">{editingMatch.homeTeam?.name}</p>
-                <input type="number" min="0" className="input-field w-20 text-center text-2xl font-bold" value={matchData.homeScore}
-                  onChange={e => setMatchData(p => ({ ...p, homeScore: +e.target.value }))} />
-              </div>
-              <span className="text-2xl font-bold text-gray-300">-</span>
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-600 mb-1">{editingMatch.awayTeam?.name}</p>
-                <input type="number" min="0" className="input-field w-20 text-center text-2xl font-bold" value={matchData.awayScore}
-                  onChange={e => setMatchData(p => ({ ...p, awayScore: +e.target.value }))} />
-              </div>
-            </div>
-
-            {/* Fair Play */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Fair Play {editingMatch.homeTeam?.name} (1-5)</label>
-                <input type="number" min="1" max="5" step="0.5" className="input-field" value={matchData.homeFairPlay}
-                  onChange={e => setMatchData(p => ({ ...p, homeFairPlay: +e.target.value }))} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Fair Play {editingMatch.awayTeam?.name} (1-5)</label>
-                <input type="number" min="1" max="5" step="0.5" className="input-field" value={matchData.awayFairPlay}
-                  onChange={e => setMatchData(p => ({ ...p, awayFairPlay: +e.target.value }))} />
-              </div>
-            </div>
-
-            {/* Goals */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">Goles</h4>
-              {matchData.goals.map((g, i) => (
-                <div key={i} className="flex items-center gap-2 mb-1 text-sm bg-green-50 p-2 rounded">
-                  <span className="font-medium">{g._name || 'Jugador'}</span>
-                  <span className="text-gray-500">({g._side === 'home' ? editingMatch.homeTeam?.name : editingMatch.awayTeam?.name})</span>
-                  <span className="text-gray-400">min {g.minute}'</span>
-                  <button type="button" className="ml-auto text-red-500 text-xs" onClick={() => removeGoal(i)}>Quitar</button>
-                </div>
-              ))}
-              <div className="flex items-end gap-2 mt-2">
-                <input className="input-field text-sm flex-1" placeholder="Nombre jugador" value={newGoal.playerName} onChange={e => setNewGoal(p => ({ ...p, playerName: e.target.value }))} />
-                <select className="input-field text-sm w-28" value={newGoal.teamSide} onChange={e => setNewGoal(p => ({ ...p, teamSide: e.target.value }))}>
-                  <option value="home">{editingMatch.homeTeam?.name}</option>
-                  <option value="away">{editingMatch.awayTeam?.name}</option>
-                </select>
-                <input type="number" min="1" className="input-field text-sm w-16" placeholder="Min" value={newGoal.minute} onChange={e => setNewGoal(p => ({ ...p, minute: +e.target.value }))} />
-                <button type="button" className="btn-primary text-sm px-3 py-2.5" onClick={addGoal}>+</button>
-              </div>
-            </div>
-
-            {/* Cards */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">Tarjetas</h4>
-              {matchData.cards.map((c, i) => (
-                <div key={i} className={`flex items-center gap-2 mb-1 text-sm p-2 rounded ${c.type === 'RED' ? 'bg-red-50' : 'bg-yellow-50'}`}>
-                  <span className={`w-4 h-5 rounded-sm ${c.type === 'RED' ? 'bg-red-500' : 'bg-yellow-400'}`}></span>
-                  <span className="font-medium">{c._name || 'Jugador'}</span>
-                  <span className="text-gray-400">min {c.minute}'</span>
-                  {c.reason && <span className="text-xs text-gray-500">- {c.reason}</span>}
-                </div>
-              ))}
-              <div className="flex items-end gap-2 mt-2">
-                <input className="input-field text-sm flex-1" placeholder="Nombre jugador" value={newCard.playerName} onChange={e => setNewCard(p => ({ ...p, playerName: e.target.value }))} />
-                <select className="input-field text-sm w-28" value={newCard.teamSide} onChange={e => setNewCard(p => ({ ...p, teamSide: e.target.value }))}>
-                  <option value="home">{editingMatch.homeTeam?.name}</option>
-                  <option value="away">{editingMatch.awayTeam?.name}</option>
-                </select>
-                <select className="input-field text-sm w-24" value={newCard.type} onChange={e => setNewCard(p => ({ ...p, type: e.target.value as any }))}>
-                  <option value="YELLOW">Amarilla</option><option value="RED">Roja</option>
-                </select>
-                <input type="number" min="1" className="input-field text-sm w-16" value={newCard.minute} onChange={e => setNewCard(p => ({ ...p, minute: +e.target.value }))} />
-                <button type="button" className="btn-accent text-sm px-3 py-2.5" onClick={addCard}>+</button>
-              </div>
-            </div>
-
-            {/* Incidents */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Incidentes / Notas</label>
-              <textarea className="input-field" rows={2} value={matchData.incidents} onChange={e => setMatchData(p => ({ ...p, incidents: e.target.value }))} />
-            </div>
-
-            <div className="flex gap-3">
-              <button type="submit" className="btn-primary">Guardar y Actualizar Posiciones</button>
-              <button type="button" className="btn-outline" onClick={() => setEditingMatch(null)}>Cancelar</button>
-            </div>
-          </form>
+      {msg && (
+        <div className={`mb-4 p-3 rounded-lg text-sm ${msgType === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {msg}
         </div>
       )}
 
-      {/* Match List */}
-      {isLoading ? <div className="card text-center py-12 text-gray-500">Cargando...</div> :
-        Object.keys(matchdays).length === 0 ? <div className="card text-center py-12 text-gray-500">No hay partidos. Genera el fixture desde Torneos.</div> :
+      {/* ===== MATCH DATA ENTRY ===== */}
+      {editingMatch && (
+        <div className="card mb-6 border-2 border-primary">
+          <h3 className="font-bold text-lg mb-4">
+            Cargar Datos: {editingMatch.homeTeam?.name} vs {editingMatch.awayTeam?.name}
+          </h3>
+
+          {rostersLoading ? (
+            <div className="text-center py-8 text-gray-500">Cargando planteles...</div>
+          ) : !rosters ? (
+            <div className="text-center py-8 text-red-500">Error al cargar planteles</div>
+          ) : (
+            <form onSubmit={handleSubmitMatch} className="space-y-6">
+
+              {/* Step 1: Lineup Selection */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+                  1. Seleccionar Jugadores Presentes
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {(['home', 'away'] as const).map(side => {
+                    const team = side === 'home' ? rosters.home : rosters.away;
+                    const lineup = side === 'home' ? homeLineup : awayLineup;
+                    const ineligible = team.players.filter(p => !p.eligible).length;
+                    return (
+                      <div key={side}>
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="text-sm font-semibold text-gray-700">{team.teamName}</h5>
+                          <span className="text-xs text-gray-400">{lineup.size} / {team.players.length} jugadores</span>
+                        </div>
+                        {ineligible > 0 && (
+                          <p className="text-xs text-red-500 mb-1">{ineligible} jugador(es) inhabilitado(s)</p>
+                        )}
+                        <div className="space-y-1 max-h-72 overflow-y-auto border rounded-lg p-2 bg-gray-50">
+                          {team.players.length === 0 ? (
+                            <p className="text-sm text-gray-400 p-2">Sin jugadores registrados</p>
+                          ) : team.players.map(player => (
+                            <label
+                              key={player.playerId}
+                              className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors
+                                ${!player.eligible
+                                  ? 'opacity-60 bg-red-50 cursor-not-allowed'
+                                  : lineup.has(player.playerId)
+                                    ? 'bg-green-50 ring-1 ring-green-200'
+                                    : 'hover:bg-white'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={lineup.has(player.playerId)}
+                                disabled={!player.eligible}
+                                onChange={() => togglePlayer(side, player.playerId)}
+                                className="rounded border-gray-300 text-primary focus:ring-primary"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  {player.shirtNumber !== null && (
+                                    <span className="text-xs font-bold text-gray-500 bg-white rounded px-1.5 py-0.5 border">
+                                      {player.shirtNumber}
+                                    </span>
+                                  )}
+                                  <span className="text-sm font-medium truncate">{player.fullName}</span>
+                                </div>
+                                {!player.eligible && player.reasons.map((r, i) => (
+                                  <span key={i} className="text-xs text-red-600 block mt-0.5">{r}</span>
+                                ))}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Step 2: Score */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+                  2. Resultado
+                </h4>
+                <div className="flex items-center justify-center gap-6">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-600 mb-1">{rosters.home.teamName}</p>
+                    <input type="number" min="0" className="input-field w-20 text-center text-2xl font-bold"
+                      value={matchData.homeScore}
+                      onChange={e => setMatchData(p => ({ ...p, homeScore: +e.target.value }))} />
+                  </div>
+                  <span className="text-2xl font-bold text-gray-300">-</span>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-600 mb-1">{rosters.away.teamName}</p>
+                    <input type="number" min="0" className="input-field w-20 text-center text-2xl font-bold"
+                      value={matchData.awayScore}
+                      onChange={e => setMatchData(p => ({ ...p, awayScore: +e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3: Goals */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+                  3. Goles
+                </h4>
+                {goals.map((g, i) => (
+                  <div key={i} className="flex items-center gap-2 mb-1 text-sm bg-green-50 p-2 rounded">
+                    {g._shirt !== null && <span className="text-xs font-bold text-gray-400">#{g._shirt}</span>}
+                    <span className="font-medium">{g._name}</span>
+                    <span className="text-gray-500">
+                      ({g._side === 'home' ? rosters.home.teamName : rosters.away.teamName})
+                    </span>
+                    <span className="text-gray-400">min {g.minute}&apos;</span>
+                    <button type="button" className="ml-auto text-red-500 text-xs hover:underline" onClick={() => removeGoal(i)}>
+                      Quitar
+                    </button>
+                  </div>
+                ))}
+                {(homeLineup.size > 0 || awayLineup.size > 0) ? (
+                  <div className="flex items-end gap-2 mt-2">
+                    <div className="flex-1">
+                      <select className="input-field text-sm" value={newGoal.playerId}
+                        onChange={e => setNewGoal(p => ({ ...p, playerId: e.target.value }))}>
+                        <option value="">Seleccionar goleador...</option>
+                        {homeLineup.size > 0 && (
+                          <optgroup label={rosters.home.teamName}>
+                            {getLineupPlayers('home').map(p => (
+                              <option key={p.playerId} value={p.playerId}>
+                                {p.shirtNumber ? `#${p.shirtNumber} ` : ''}{p.fullName}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {awayLineup.size > 0 && (
+                          <optgroup label={rosters.away.teamName}>
+                            {getLineupPlayers('away').map(p => (
+                              <option key={p.playerId} value={p.playerId}>
+                                {p.shirtNumber ? `#${p.shirtNumber} ` : ''}{p.fullName}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <select className="input-field text-sm" value={newGoal.assistPlayerId}
+                        onChange={e => setNewGoal(p => ({ ...p, assistPlayerId: e.target.value }))}>
+                        <option value="">Asistencia (opcional)</option>
+                        {getAllLineupPlayers().map(p => (
+                          <option key={p.playerId} value={p.playerId}>
+                            {p.shirtNumber ? `#${p.shirtNumber} ` : ''}{p.fullName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <input type="number" min="1" className="input-field text-sm w-16" placeholder="Min"
+                      value={newGoal.minute} onChange={e => setNewGoal(p => ({ ...p, minute: +e.target.value }))} />
+                    <button type="button" className="btn-primary text-sm px-3 py-2.5"
+                      onClick={addGoal} disabled={!newGoal.playerId}>+</button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-1">Selecciona jugadores primero para agregar goles</p>
+                )}
+              </div>
+
+              {/* Step 4: Cards */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+                  4. Tarjetas
+                </h4>
+                {cards.map((c, i) => (
+                  <div key={i} className={`flex items-center gap-2 mb-1 text-sm p-2 rounded ${c.type === 'RED' ? 'bg-red-50' : 'bg-yellow-50'}`}>
+                    <span className={`w-4 h-5 rounded-sm inline-block ${c.type === 'RED' ? 'bg-red-500' : 'bg-yellow-400'}`}></span>
+                    {c._shirt !== null && <span className="text-xs font-bold text-gray-400">#{c._shirt}</span>}
+                    <span className="font-medium">{c._name}</span>
+                    <span className="text-gray-400">min {c.minute}&apos;</span>
+                    {c.reason && <span className="text-xs text-gray-500">- {c.reason}</span>}
+                    <button type="button" className="ml-auto text-red-500 text-xs hover:underline"
+                      onClick={() => setCards(prev => prev.filter((_, idx) => idx !== i))}>
+                      Quitar
+                    </button>
+                  </div>
+                ))}
+                {(homeLineup.size > 0 || awayLineup.size > 0) ? (
+                  <div className="flex items-end gap-2 mt-2">
+                    <div className="flex-1">
+                      <select className="input-field text-sm" value={newCard.playerId}
+                        onChange={e => setNewCard(p => ({ ...p, playerId: e.target.value }))}>
+                        <option value="">Seleccionar jugador...</option>
+                        {homeLineup.size > 0 && (
+                          <optgroup label={rosters.home.teamName}>
+                            {getLineupPlayers('home').map(p => (
+                              <option key={p.playerId} value={p.playerId}>
+                                {p.shirtNumber ? `#${p.shirtNumber} ` : ''}{p.fullName}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {awayLineup.size > 0 && (
+                          <optgroup label={rosters.away.teamName}>
+                            {getLineupPlayers('away').map(p => (
+                              <option key={p.playerId} value={p.playerId}>
+                                {p.shirtNumber ? `#${p.shirtNumber} ` : ''}{p.fullName}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    </div>
+                    <select className="input-field text-sm w-28" value={newCard.type}
+                      onChange={e => setNewCard(p => ({ ...p, type: e.target.value as any }))}>
+                      <option value="YELLOW">Amarilla</option>
+                      <option value="RED">Roja</option>
+                    </select>
+                    <input type="number" min="1" className="input-field text-sm w-16"
+                      value={newCard.minute} onChange={e => setNewCard(p => ({ ...p, minute: +e.target.value }))} />
+                    <input className="input-field text-sm w-32" placeholder="Motivo"
+                      value={newCard.reason} onChange={e => setNewCard(p => ({ ...p, reason: e.target.value }))} />
+                    <button type="button" className="btn-accent text-sm px-3 py-2.5"
+                      onClick={addCard} disabled={!newCard.playerId}>+</button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-1">Selecciona jugadores primero para agregar tarjetas</p>
+                )}
+              </div>
+
+              {/* Step 5: Fair Play */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+                  5. Fair Play (Arbitro)
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">{rosters.home.teamName} (1-5)</label>
+                    <input type="number" min="1" max="5" step="0.5" className="input-field"
+                      value={matchData.homeFairPlay}
+                      onChange={e => setMatchData(p => ({ ...p, homeFairPlay: +e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">{rosters.away.teamName} (1-5)</label>
+                    <input type="number" min="1" max="5" step="0.5" className="input-field"
+                      value={matchData.awayFairPlay}
+                      onChange={e => setMatchData(p => ({ ...p, awayFairPlay: +e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 6: Incidents */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+                  6. Incidentes / Notas
+                </h4>
+                <textarea className="input-field" rows={2} value={matchData.incidents}
+                  placeholder="Cualquier observacion relevante del partido..."
+                  onChange={e => setMatchData(p => ({ ...p, incidents: e.target.value }))} />
+              </div>
+
+              {/* Submit */}
+              <div className="flex gap-3 pt-4 border-t">
+                <button type="submit" className="btn-primary">
+                  Guardar y Actualizar Posiciones
+                </button>
+                <button type="button" className="btn-outline" onClick={() => { setEditingMatch(null); setRosters(null); }}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* ===== MATCH LIST ===== */}
+      {isLoading ? (
+        <div className="card text-center py-12 text-gray-500">Cargando...</div>
+      ) : Object.keys(matchdays).length === 0 ? (
+        <div className="card text-center py-12 text-gray-500">
+          No hay partidos. Genera el fixture desde Torneos.
+        </div>
+      ) : (
         <div className="space-y-8">
           {Object.entries(matchdays).sort(([a], [b]) => Number(a) - Number(b)).map(([matchday, dayMatches]) => (
             <div key={matchday}>
@@ -234,22 +523,32 @@ export default function MatchesPage() {
                   <div key={match.id} className="card">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-6 flex-1">
-                        <div className="text-right flex-1"><span className="font-medium">{match.homeTeam?.name}</span></div>
+                        <div className="text-right flex-1">
+                          <span className="font-medium">{match.homeTeam?.name}</span>
+                        </div>
                         <div className="flex items-center gap-2 min-w-[80px] justify-center">
                           {match.status !== 'SCHEDULED' ? (
                             <span className="text-2xl font-bold">{match.homeScore} - {match.awayScore}</span>
                           ) : (
                             <span className="text-sm text-gray-400">
-                              {match.scheduledAt ? new Date(match.scheduledAt).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' }) : 'vs'}
+                              {match.scheduledAt
+                                ? new Date(match.scheduledAt).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })
+                                : 'vs'}
                             </span>
                           )}
                         </div>
-                        <div className="flex-1"><span className="font-medium">{match.awayTeam?.name}</span></div>
+                        <div className="flex-1">
+                          <span className="font-medium">{match.awayTeam?.name}</span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-3 ml-4">
-                        <span className={statusLabels[match.status]?.cls || 'badge'}>{statusLabels[match.status]?.text || match.status}</span>
+                        <span className={statusLabels[match.status]?.cls || 'badge'}>
+                          {statusLabels[match.status]?.text || match.status}
+                        </span>
                         {match.status === 'SCHEDULED' && (
-                          <button className="btn-primary text-sm px-3 py-1.5" onClick={() => openMatchEntry(match)}>Cargar Datos</button>
+                          <button className="btn-primary text-sm px-3 py-1.5" onClick={() => openMatchEntry(match)}>
+                            Cargar Datos
+                          </button>
                         )}
                       </div>
                     </div>
@@ -260,7 +559,7 @@ export default function MatchesPage() {
             </div>
           ))}
         </div>
-      }
+      )}
     </div>
   );
 }

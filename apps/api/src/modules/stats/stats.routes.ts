@@ -6,6 +6,9 @@ const router = Router();
 
 router.use(resolveTenant, requireTenant);
 
+// Dashboard summary
+router.get('/dashboard', statsController.getDashboardSummary);
+
 // Top scorers for a tournament
 router.get('/scorers/:tournamentId', statsController.getTopScorers);
 

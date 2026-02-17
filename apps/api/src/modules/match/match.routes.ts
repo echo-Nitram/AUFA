@@ -11,6 +11,9 @@ router.use(resolveTenant, requireTenant);
 router.get('/tournament/:tournamentId', matchController.listMatches);
 router.get('/:id', matchController.getMatch);
 
+// Get match rosters with eligibility for lineup selection
+router.get('/:id/rosters', authenticate, matchController.getMatchRosters);
+
 // Match data entry (post-match by operator)
 router.post('/:id/data', authenticate, requireTenantAdmin, matchController.enterMatchData);
 

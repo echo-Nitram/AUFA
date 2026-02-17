@@ -402,11 +402,20 @@ export async function getPublicTenant(req: Request, res: Response) {
         id: true,
         name: true,
         slug: true,
+        plan: true,
         logoUrl: true,
         bannerUrl: true,
         primaryColor: true,
         secondaryColor: true,
         accentColor: true,
+        matchFee: true,
+        refereeFee: true,
+        monthlyFee: true,
+        currency: true,
+        venues: {
+          select: { id: true, name: true, address: true },
+          orderBy: { name: 'asc' },
+        },
       },
     });
 

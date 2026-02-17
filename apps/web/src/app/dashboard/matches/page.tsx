@@ -44,6 +44,10 @@ export default function MatchesPage() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [changingVenue, setChangingVenue] = useState<string | null>(null); // matchId being edited
 
+  // Scheduling
+  const [schedulingMatch, setSchedulingMatch] = useState<string | null>(null);
+  const [scheduleDate, setScheduleDate] = useState('');
+
   // Lineup selection
   const [homeLineup, setHomeLineup] = useState<Set<string>>(new Set());
   const [awayLineup, setAwayLineup] = useState<Set<string>>(new Set());
@@ -225,6 +229,19 @@ export default function MatchesPage() {
       await matchApi.assignVenue(tenantId, token, matchId, venueId || null);
       setChangingVenue(null);
       // Refresh matches
+      matchApi.listByTournament(tenantId, selectedTournament).then(setMatches);
+    } catch (err: any) {
+      setMsg(err.message);
+      setMsgType('error');
+    }
+  }
+
+  async function handleScheduleMatch(matchId: string, dateValue: string) {
+    if (!tenantId || !token) return;
+    try {
+      await matchApi.schedule(tenantId, token, matchId, dateValue || null);
+      setSchedulingMatch(null);
+      setScheduleDate('');
       matchApi.listByTournament(tenantId, selectedTournament).then(setMatches);
     } catch (err: any) {
       setMsg(err.message);
@@ -576,34 +593,82 @@ export default function MatchesPage() {
                         )}
                       </div>
                     </div>
-                    {/* Venue assignment */}
-                    <div className="mt-2 flex items-center gap-2">
-                      {changingVenue === match.id ? (
-                        <>
-                          <select
-                            className="input-field text-xs py-1 w-48"
-                            defaultValue={match.venue?.id || ''}
-                            onChange={e => handleVenueChange(match.id, e.target.value)}
-                            autoFocus
+                    {/* Venue + Schedule row */}
+                    <div className="mt-2 flex items-center gap-4 flex-wrap">
+                      {/* Venue assignment */}
+                      <div className="flex items-center gap-2">
+                        {changingVenue === match.id ? (
+                          <>
+                            <select
+                              className="input-field text-xs py-1 w-48"
+                              defaultValue={match.venue?.id || ''}
+                              onChange={e => handleVenueChange(match.id, e.target.value)}
+                              autoFocus
+                            >
+                              <option value="">Sin cancha</option>
+                              {venues.map(v => (
+                                <option key={v.id} value={v.id}>{v.name}</option>
+                              ))}
+                            </select>
+                            <button className="text-xs text-gray-400 hover:text-gray-600"
+                              onClick={() => setChangingVenue(null)}>Cancelar</button>
+                          </>
+                        ) : (
+                          <button
+                            className="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1"
+                            onClick={() => setChangingVenue(match.id)}
                           >
-                            <option value="">Sin cancha</option>
-                            {venues.map(v => (
-                              <option key={v.id} value={v.id}>{v.name}</option>
-                            ))}
-                          </select>
-                          <button className="text-xs text-gray-400 hover:text-gray-600"
-                            onClick={() => setChangingVenue(null)}>Cancelar</button>
-                        </>
-                      ) : (
-                        <button
-                          className="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1"
-                          onClick={() => setChangingVenue(match.id)}
-                        >
-                          {match.venue
-                            ? <><span>{match.venue.name}</span><span className="text-gray-300">| Cambiar</span></>
-                            : <span className="text-amber-500">+ Asignar cancha</span>
-                          }
-                        </button>
+                            {match.venue
+                              ? <><span>{match.venue.name}</span><span className="text-gray-300">| Cambiar</span></>
+                              : <span className="text-amber-500">+ Asignar cancha</span>
+                            }
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Schedule assignment */}
+                      <div className="flex items-center gap-2">
+                        {schedulingMatch === match.id ? (
+                          <>
+                            <input
+                              type="datetime-local"
+                              className="input-field text-xs py-1 w-48"
+                              defaultValue={match.scheduledAt ? new Date(match.scheduledAt).toISOString().slice(0, 16) : ''}
+                              onChange={e => setScheduleDate(e.target.value)}
+                              autoFocus
+                            />
+                            <button
+                              className="text-xs text-primary font-medium hover:underline"
+                              onClick={() => handleScheduleMatch(match.id, scheduleDate)}
+                            >
+                              Guardar
+                            </button>
+                            <button className="text-xs text-gray-400 hover:text-gray-600"
+                              onClick={() => { setSchedulingMatch(null); setScheduleDate(''); }}>
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1"
+                            onClick={() => { setSchedulingMatch(match.id); setScheduleDate(match.scheduledAt || ''); }}
+                          >
+                            {match.scheduledAt
+                              ? <>
+                                  <span>{new Date(match.scheduledAt).toLocaleString('es-UY', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                  <span className="text-gray-300">| Cambiar</span>
+                                </>
+                              : <span className="text-amber-500">+ Programar horario</span>
+                            }
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Referee info */}
+                      {match.referee && (
+                        <span className="text-xs text-gray-400">
+                          Arbitro: {match.referee.fullName}
+                        </span>
                       )}
                     </div>
                   </div>

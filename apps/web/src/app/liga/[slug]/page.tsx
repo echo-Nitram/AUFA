@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePublicLeague } from '@/lib/public-league-context';
-import { leagueApi, matchApi, statsApi } from '@/lib/api';
+import { leagueApi, matchApi, statsApi, tenantApi } from '@/lib/api';
 
 export default function PublicLeaguePage() {
   const league = usePublicLeague();
@@ -12,8 +12,11 @@ export default function PublicLeaguePage() {
   const [recentMatches, setRecentMatches] = useState<any[]>([]);
   const [nextMatches, setNextMatches] = useState<any[]>([]);
   const [scorers, setScorers] = useState<any[]>([]);
+  const [leagueInfo, setLeagueInfo] = useState<any>(null);
 
   useEffect(() => {
+    tenantApi.getBySlug(league.slug).then(setLeagueInfo).catch(console.error);
+
     leagueApi.listTournaments(league.id).then(data => {
       setTournaments(data);
       if (data.length > 0) {
@@ -28,9 +31,11 @@ export default function PublicLeaguePage() {
         ]).catch(console.error);
       }
     }).catch(console.error);
-  }, [league.id]);
+  }, [league.id, league.slug]);
 
   const basePath = `/liga/${league.slug}`;
+
+  const genderLabel: Record<string, string> = { MALE: 'Masculino', FEMALE: 'Femenino', MIXED: 'Mixto' };
 
   return (
     <div className="space-y-8">
@@ -38,10 +43,29 @@ export default function PublicLeaguePage() {
       {tournaments.length > 0 && (
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900">{tournaments[0].name}</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {tournaments[0].status === 'IN_PROGRESS' ? 'En curso' :
-             tournaments[0].status === 'REGISTRATION' ? 'Inscripciones abiertas' : tournaments[0].status}
-          </p>
+          <div className="flex items-center justify-center gap-3 mt-2 flex-wrap">
+            <span className="text-sm text-gray-500">
+              {tournaments[0].status === 'IN_PROGRESS' ? 'En curso' :
+               tournaments[0].status === 'REGISTRATION' ? 'Inscripciones abiertas' : tournaments[0].status}
+            </span>
+            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+              {tournaments[0].gameType}
+            </span>
+            {tournaments[0].gender && (
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                {genderLabel[tournaments[0].gender] || tournaments[0].gender}
+              </span>
+            )}
+            {(tournaments[0].minAge || tournaments[0].maxAge) && (
+              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                {tournaments[0].minAge && tournaments[0].maxAge
+                  ? `${tournaments[0].minAge}-${tournaments[0].maxAge} años`
+                  : tournaments[0].minAge
+                    ? `+${tournaments[0].minAge} años`
+                    : `Sub ${tournaments[0].maxAge}`}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -147,11 +171,20 @@ export default function PublicLeaguePage() {
               <div key={m.id} className="px-4 py-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium text-gray-900 flex-1 text-right">{m.homeTeam?.name}</span>
-                  <span className="mx-4 text-gray-400 text-xs min-w-[60px] text-center">
-                    {m.scheduledAt
-                      ? new Date(m.scheduledAt).toLocaleDateString('es-UY', { weekday: 'short', day: 'numeric', month: 'short' })
-                      : 'vs'}
-                  </span>
+                  <div className="mx-4 text-center min-w-[80px]">
+                    {m.scheduledAt ? (
+                      <>
+                        <p className="text-xs text-gray-500 font-medium">
+                          {new Date(m.scheduledAt).toLocaleDateString('es-UY', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </p>
+                        <p className="text-xs text-primary font-bold">
+                          {new Date(m.scheduledAt).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </>
+                    ) : (
+                      <span className="text-xs text-gray-400">vs</span>
+                    )}
+                  </div>
                   <span className="font-medium text-gray-900 flex-1">{m.awayTeam?.name}</span>
                 </div>
                 <p className="text-xs text-gray-400 text-center mt-1">
@@ -166,6 +199,62 @@ export default function PublicLeaguePage() {
           </div>
         </div>
       </div>
+      {/* Venues & Pricing */}
+      {leagueInfo && (
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Venues */}
+          {leagueInfo.venues && leagueInfo.venues.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900">Canchas</h3>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {leagueInfo.venues.map((v: any) => (
+                  <div key={v.id} className="px-4 py-3">
+                    <p className="text-sm font-medium text-gray-900">{v.name}</p>
+                    {v.address && <p className="text-xs text-gray-400 mt-0.5">{v.address}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pricing */}
+          {(leagueInfo.matchFee || leagueInfo.refereeFee || leagueInfo.monthlyFee) && (
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900">Costos</h3>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {leagueInfo.matchFee && (
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Cuota por partido</span>
+                    <span className="text-sm font-bold text-gray-900">
+                      {leagueInfo.currency || 'UYU'} {leagueInfo.matchFee}
+                    </span>
+                  </div>
+                )}
+                {leagueInfo.refereeFee && (
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Arbitraje</span>
+                    <span className="text-sm font-bold text-gray-900">
+                      {leagueInfo.currency || 'UYU'} {leagueInfo.refereeFee}
+                    </span>
+                  </div>
+                )}
+                {leagueInfo.monthlyFee && (
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Cuota mensual</span>
+                    <span className="text-sm font-bold text-gray-900">
+                      {leagueInfo.currency || 'UYU'} {leagueInfo.monthlyFee}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

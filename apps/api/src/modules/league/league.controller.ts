@@ -54,6 +54,7 @@ export async function listTournaments(req: AuthRequest, res: Response) {
       include: { _count: { select: { tournamentTeams: true, matches: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    // Return all fields including minAge, maxAge, gender, startDate, endDate
     res.json(tournaments);
   } catch (error) {
     console.error('ListTournaments error:', error);
@@ -386,6 +387,40 @@ export async function registerTeamInTournament(req: AuthRequest, res: Response) 
       const count = await prisma.tournamentTeam.count({ where: { tournamentId } });
       if (count >= tournament.maxTeams) {
         return res.status(400).json({ error: 'Torneo completo: máximo de equipos alcanzado' });
+      }
+    }
+
+    // Age validation: warn if team has players outside age range
+    if (tournament.minAge || tournament.maxAge) {
+      const teamPlayers = await prisma.teamPlayer.findMany({
+        where: { teamId, isActive: true },
+        include: { player: { select: { fullName: true, dateOfBirth: true } } },
+      });
+
+      const now = new Date();
+      const warnings: string[] = [];
+
+      for (const tp of teamPlayers) {
+        if (!tp.player.dateOfBirth) continue;
+        const age = Math.floor((now.getTime() - new Date(tp.player.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+        if (tournament.minAge && age < tournament.minAge) {
+          warnings.push(`${tp.player.fullName} tiene ${age} años (min: ${tournament.minAge})`);
+        }
+        if (tournament.maxAge && age > tournament.maxAge) {
+          warnings.push(`${tp.player.fullName} tiene ${age} años (max: ${tournament.maxAge})`);
+        }
+      }
+
+      if (warnings.length > 0) {
+        // Register but warn (don't block - admin decides)
+        const tt = await prisma.tournamentTeam.create({
+          data: { tournamentId, teamId },
+        });
+        return res.status(201).json({
+          message: 'Equipo inscrito con advertencias de edad',
+          warnings,
+          tournamentTeam: tt,
+        });
       }
     }
 

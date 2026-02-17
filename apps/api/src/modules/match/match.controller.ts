@@ -513,6 +513,58 @@ export async function assignVenue(req: AuthRequest, res: Response) {
   }
 }
 
+export async function scheduleMatch(req: AuthRequest, res: Response) {
+  try {
+    const { scheduledAt } = req.body;
+
+    const match = await prisma.match.update({
+      where: { id: req.params.id },
+      data: { scheduledAt: scheduledAt ? new Date(scheduledAt) : null },
+      include: {
+        homeTeam: { select: { name: true } },
+        awayTeam: { select: { name: true } },
+      },
+    });
+
+    res.json({
+      message: scheduledAt
+        ? `Partido programado para ${new Date(scheduledAt).toLocaleString('es-UY')}`
+        : 'Horario removido del partido',
+      match,
+    });
+  } catch (error) {
+    console.error('ScheduleMatch error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+export async function bulkScheduleMatchday(req: AuthRequest, res: Response) {
+  try {
+    const { schedules } = req.body as { schedules: { matchId: string; scheduledAt: string; venueId?: string }[] };
+
+    if (!schedules || !Array.isArray(schedules)) {
+      return res.status(400).json({ error: 'Se requiere un array de schedules' });
+    }
+
+    const results = await Promise.all(
+      schedules.map(s =>
+        prisma.match.update({
+          where: { id: s.matchId },
+          data: {
+            scheduledAt: s.scheduledAt ? new Date(s.scheduledAt) : null,
+            ...(s.venueId !== undefined && { venueId: s.venueId || null }),
+          },
+        })
+      )
+    );
+
+    res.json({ message: `${results.length} partidos programados`, count: results.length });
+  } catch (error) {
+    console.error('BulkScheduleMatchday error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
 export async function getMatchStats(req: AuthRequest, res: Response) {
   try {
     const matchId = req.params.id;

@@ -108,6 +108,10 @@ export const matchApi = {
     apiFetch(`/api/matches/${matchId}/data`, { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
   assignVenue: (tenantId: string, token: string, matchId: string, venueId: string | null) =>
     apiFetch(`/api/matches/${matchId}/venue`, { tenantId, token, method: 'PUT', body: JSON.stringify({ venueId }) }),
+  schedule: (tenantId: string, token: string, matchId: string, scheduledAt: string | null) =>
+    apiFetch(`/api/matches/${matchId}/schedule`, { tenantId, token, method: 'PUT', body: JSON.stringify({ scheduledAt }) }),
+  bulkSchedule: (tenantId: string, token: string, schedules: { matchId: string; scheduledAt: string; venueId?: string }[]) =>
+    apiFetch('/api/matches/bulk-schedule', { tenantId, token, method: 'POST', body: JSON.stringify({ schedules }) }),
 };
 
 // Fixture

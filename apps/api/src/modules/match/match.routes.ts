@@ -23,6 +23,12 @@ router.put('/:id/referee', authenticate, requireTenantAdmin, matchController.ass
 // Assign/change venue
 router.put('/:id/venue', authenticate, requireTenantAdmin, matchController.assignVenue);
 
+// Schedule match (date/time)
+router.put('/:id/schedule', authenticate, requireTenantAdmin, matchController.scheduleMatch);
+
+// Bulk schedule matchday
+router.post('/bulk-schedule', authenticate, requireTenantAdmin, matchController.bulkScheduleMatchday);
+
 // Get match stats summary
 router.get('/:id/stats', matchController.getMatchStats);
 

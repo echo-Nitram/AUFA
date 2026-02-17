@@ -87,12 +87,15 @@ function showHelp() {
 // ── Helpers ─────────────────────────────────────────────────
 function run(cmd, opts = {}) {
   try {
-    return execSync(cmd, {
+    execSync(cmd, {
       stdio: opts.silent ? 'pipe' : 'inherit',
       cwd: opts.cwd || ROOT,
       env: { ...process.env, ...opts.env },
       timeout: opts.timeout || 120000,
     });
+    // Always return true on success. execSync with stdio:'inherit' returns null
+    // (stdout not captured), which would be confused with canFail failure.
+    return true;
   } catch (e) {
     if (opts.canFail) return null;
     throw e;

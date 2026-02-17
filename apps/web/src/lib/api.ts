@@ -103,6 +103,33 @@ export const tribunalApi = {
     apiFetch(`/api/tribunal/sanctions/${sanctionId}/resolve`, { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
 };
 
+// Admin (tenant management)
+export const adminApi = {
+  getSettings: (tenantId: string, token: string) =>
+    apiFetch('/api/tenants/admin/settings', { tenantId, token }),
+  updateSettings: (tenantId: string, token: string, data: any) =>
+    apiFetch('/api/tenants/admin/settings', { tenantId, token, method: 'PUT', body: JSON.stringify(data) }),
+  listMembers: (tenantId: string, token: string) =>
+    apiFetch('/api/tenants/admin/members', { tenantId, token }),
+  addMember: (tenantId: string, token: string, data: any) =>
+    apiFetch('/api/tenants/admin/members', { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
+  updateMemberRole: (tenantId: string, token: string, memberId: string, role: string) =>
+    apiFetch(`/api/tenants/admin/members/${memberId}`, { tenantId, token, method: 'PUT', body: JSON.stringify({ role }) }),
+  removeMember: (tenantId: string, token: string, memberId: string) =>
+    apiFetch(`/api/tenants/admin/members/${memberId}`, { tenantId, token, method: 'DELETE' }),
+};
+
+// Referees
+export const refereeApi = {
+  listAvailable: (dayOfWeek?: number) =>
+    apiFetch(`/api/referees/available${dayOfWeek !== undefined ? `?dayOfWeek=${dayOfWeek}` : ''}`),
+  getProfile: (id: string) => apiFetch(`/api/referees/${id}`),
+  hire: (tenantId: string, token: string, refereeId: string, matchIds: string[]) =>
+    apiFetch('/api/referees/hire', { tenantId, token, method: 'POST', body: JSON.stringify({ refereeId, matchIds }) }),
+  listMatchesByTournament: (tenantId: string, tournamentId: string) =>
+    apiFetch(`/api/matches/tournament/${tournamentId}`, { tenantId }),
+};
+
 // Stats
 export const statsApi = {
   dashboard: (tenantId: string) => apiFetch(`/api/stats/dashboard`, { tenantId }),

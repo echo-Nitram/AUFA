@@ -147,6 +147,154 @@ export async function updateBranding(req: AuthRequest, res: Response) {
   }
 }
 
+export async function listMembers(req: AuthRequest, res: Response) {
+  try {
+    const members = await prisma.tenantMember.findMany({
+      where: { tenantId: req.tenantId! },
+      include: {
+        user: { select: { id: true, email: true, role: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json(members);
+  } catch (error) {
+    console.error('ListMembers error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+export async function addMember(req: AuthRequest, res: Response) {
+  try {
+    const { email, role } = req.body as { email: string; role: 'ADMIN' | 'OPERATOR' };
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ error: 'No existe un usuario con ese email' });
+    }
+
+    const existing = await prisma.tenantMember.findFirst({
+      where: { tenantId: req.tenantId!, userId: user.id },
+    });
+    if (existing) {
+      return res.status(409).json({ error: 'El usuario ya es miembro de esta liga' });
+    }
+
+    const member = await prisma.tenantMember.create({
+      data: {
+        tenantId: req.tenantId!,
+        userId: user.id,
+        role: role || 'OPERATOR',
+      },
+      include: { user: { select: { id: true, email: true, role: true } } },
+    });
+
+    res.status(201).json(member);
+  } catch (error) {
+    console.error('AddMember error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+export async function updateMemberRole(req: AuthRequest, res: Response) {
+  try {
+    const { role } = req.body as { role: 'ADMIN' | 'OPERATOR' };
+
+    const member = await prisma.tenantMember.findFirst({
+      where: { id: req.params.memberId, tenantId: req.tenantId! },
+    });
+    if (!member) {
+      return res.status(404).json({ error: 'Miembro no encontrado' });
+    }
+
+    const updated = await prisma.tenantMember.update({
+      where: { id: member.id },
+      data: { role },
+      include: { user: { select: { id: true, email: true } } },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('UpdateMemberRole error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+export async function removeMember(req: AuthRequest, res: Response) {
+  try {
+    const member = await prisma.tenantMember.findFirst({
+      where: { id: req.params.memberId, tenantId: req.tenantId! },
+    });
+    if (!member) {
+      return res.status(404).json({ error: 'Miembro no encontrado' });
+    }
+
+    // Don't allow removing yourself
+    if (member.userId === req.user!.userId) {
+      return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' });
+    }
+
+    await prisma.tenantMember.update({
+      where: { id: member.id },
+      data: { isActive: false },
+    });
+
+    res.json({ message: 'Miembro eliminado' });
+  } catch (error) {
+    console.error('RemoveMember error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+export async function getAdminSettings(req: AuthRequest, res: Response) {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: req.tenantId! },
+      select: {
+        id: true, name: true, slug: true, subdomain: true, plan: true,
+        logoUrl: true, bannerUrl: true,
+        primaryColor: true, secondaryColor: true, accentColor: true,
+        backgroundColor: true, textColor: true,
+        commissionRate: true,
+      },
+    });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Liga no encontrada' });
+    }
+
+    res.json(tenant);
+  } catch (error) {
+    console.error('GetAdminSettings error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+export async function updateAdminSettings(req: AuthRequest, res: Response) {
+  try {
+    const { name, primaryColor, secondaryColor, accentColor, backgroundColor, textColor, logoUrl, bannerUrl } = req.body;
+
+    const tenant = await prisma.tenant.update({
+      where: { id: req.tenantId! },
+      data: {
+        ...(name && { name }),
+        ...(primaryColor && { primaryColor }),
+        ...(secondaryColor && { secondaryColor }),
+        ...(accentColor && { accentColor }),
+        ...(backgroundColor && { backgroundColor }),
+        ...(textColor && { textColor }),
+        ...(logoUrl !== undefined && { logoUrl }),
+        ...(bannerUrl !== undefined && { bannerUrl }),
+      },
+    });
+
+    res.json(tenant);
+  } catch (error) {
+    console.error('UpdateAdminSettings error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
 export async function getPublicTenant(req: Request, res: Response) {
   try {
     const { slug } = req.params;

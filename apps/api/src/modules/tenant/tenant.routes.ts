@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as tenantController from './tenant.controller';
 import { authenticate, requireSuperAdmin } from '../../middleware/auth';
-import { resolveTenant, requireTenant } from '../../middleware/tenant';
+import { resolveTenant, requireTenant, requireTenantAdmin } from '../../middleware/tenant';
 
 const router = Router();
 
@@ -17,5 +17,15 @@ router.get('/public/:slug', tenantController.getPublicTenant);
 
 // Public: resolve tenant info for frontend (needs X-Tenant-ID header)
 router.get('/resolve/current', resolveTenant, requireTenant, tenantController.getCurrentTenant);
+
+// Admin panel: settings & branding
+router.get('/admin/settings', authenticate, resolveTenant, requireTenant, requireTenantAdmin, tenantController.getAdminSettings);
+router.put('/admin/settings', authenticate, resolveTenant, requireTenant, requireTenantAdmin, tenantController.updateAdminSettings);
+
+// Admin panel: manage members
+router.get('/admin/members', authenticate, resolveTenant, requireTenant, requireTenantAdmin, tenantController.listMembers);
+router.post('/admin/members', authenticate, resolveTenant, requireTenant, requireTenantAdmin, tenantController.addMember);
+router.put('/admin/members/:memberId', authenticate, resolveTenant, requireTenant, requireTenantAdmin, tenantController.updateMemberRole);
+router.delete('/admin/members/:memberId', authenticate, resolveTenant, requireTenant, requireTenantAdmin, tenantController.removeMember);
 
 export default router;

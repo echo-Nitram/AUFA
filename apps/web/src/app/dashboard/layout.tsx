@@ -12,9 +12,11 @@ const navigation = [
   { name: 'Equipos', href: '/dashboard/teams', icon: 'E' },
   { name: 'Partidos', href: '/dashboard/matches', icon: 'P' },
   { name: 'Posiciones', href: '/dashboard/standings', icon: 'ST' },
+  { name: 'Arbitros', href: '/dashboard/referees', icon: 'AR' },
   { name: 'Finanzas', href: '/dashboard/treasury', icon: '$' },
   { name: 'Sanciones', href: '/dashboard/sanctions', icon: 'SN' },
   { name: 'Mi AUFA ID', href: '/dashboard/passport', icon: 'ID' },
+  { name: 'Administrar', href: '/dashboard/admin', icon: 'AD' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

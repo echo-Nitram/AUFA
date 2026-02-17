@@ -343,7 +343,12 @@ export async function createTenantSelfService(req: Request, res: Response) {
         });
         // Also create player record so they have full AUFA ID
         await tx.player.create({
-          data: { userId: user.id, fullName: data.fullName, ci: `ORG-${Date.now()}` },
+          data: {
+            userId: user.id,
+            fullName: data.fullName,
+            ci: `ORG-${Date.now()}`,
+            dateOfBirth: new Date('1990-01-01'),
+          },
         });
       } else {
         // Verify password for existing user

@@ -201,30 +201,33 @@ async function checkPostgres() {
   }
 
   if (dbUrl) {
+    // Strip ?schema=xxx param — psql doesn't understand it (Prisma-only param)
+    const psqlUrl = dbUrl.replace(/\?.*$/, '');
+
     // Method 1: Try psql -c (works on all platforms)
-    const psqlTest = runSilent(`psql "${dbUrl}" -c "SELECT 1"`, { timeout: 10000 });
+    const psqlTest = runSilent(`psql "${psqlUrl}" -c "SELECT 1"`, { timeout: 10000 });
     if (psqlTest !== null) {
       ok('Conexion a PostgreSQL exitosa');
       return true;
     }
 
-    // Method 2: Use a small inline Node script (no shell-specific syntax)
-    const inlineScript = `
-      const { execSync } = require('child_process');
-      try {
-        execSync('npx prisma db execute --stdin', {
-          input: 'SELECT 1;',
-          cwd: ${JSON.stringify(API_DIR)},
-          stdio: ['pipe', 'pipe', 'pipe'],
-          timeout: 15000,
-        });
-        process.exit(0);
-      } catch { process.exit(1); }
-    `;
-    const prismaTest = runSilent(`node -e "${inlineScript.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`, { timeout: 20000 });
-    if (prismaTest !== null) {
-      ok('Conexion a PostgreSQL exitosa (via Prisma)');
-      return true;
+    // Method 2: Write a temp script to test via @prisma/client (no shell quoting issues)
+    const checkScript = path.join(API_DIR, '_check_db.js');
+    try {
+      fs.writeFileSync(checkScript, `
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+p.$queryRaw\`SELECT 1\`
+  .then(() => { console.log('ok'); return p.$disconnect(); })
+  .catch((e) => { console.error(e.message); return p.$disconnect(); process.exit(1); });
+`);
+      const prismaTest = runSilent('node _check_db.js', { cwd: API_DIR, timeout: 15000 });
+      if (prismaTest && prismaTest.includes('ok')) {
+        ok('Conexion a PostgreSQL exitosa (via Prisma)');
+        return true;
+      }
+    } catch { /* ignore */ } finally {
+      try { fs.unlinkSync(checkScript); } catch { /* ignore */ }
     }
   }
 
@@ -232,7 +235,8 @@ async function checkPostgres() {
   warn('No se pudo verificar la conexion a PostgreSQL automaticamente.');
   info('Asegurate de que PostgreSQL esta corriendo y los datos en .env son correctos.');
   info('Podes verificar manualmente con:');
-  info(`  psql "${dbUrl || 'postgresql://aufa:aufa_secret@localhost:5432/aufa'}" -c "SELECT 1"`);
+  const hintUrl = dbUrl ? dbUrl.replace(/\?.*$/, '') : 'postgresql://aufa:aufa_secret@localhost:5432/aufa';
+  info(`  psql "${hintUrl}" -c "SELECT 1"`);
   info('Si usas Docker:  docker compose up -d postgres');
   const answer = await ask('PostgreSQL esta corriendo? Continuar? (s/n)');
   if (answer !== 's' && answer !== 'si') {

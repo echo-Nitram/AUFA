@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
+import { assetUrl } from '@/lib/api';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -50,7 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="p-6 border-b border-gray-100">
           <Link href="/dashboard" className="flex items-center gap-3">
             {tenant?.branding.logoUrl ? (
-              <img src={tenant.branding.logoUrl} alt={tenant.name} className="w-8 h-8 rounded" />
+              <img src={assetUrl(tenant.branding.logoUrl)} alt={tenant.name} className="w-8 h-8 rounded object-cover" />
             ) : (
               <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-white font-bold text-sm">
                 {tenant?.name?.[0] || 'A'}

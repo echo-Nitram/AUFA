@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useTenant } from '@/lib/tenant-context';
 import { useAuth } from '@/lib/auth-context';
-import { adminApi, uploadApi } from '@/lib/api';
+import { adminApi, uploadApi, assetUrl } from '@/lib/api';
 
 interface Member {
   id: string;
@@ -23,12 +23,16 @@ interface Settings {
   accentColor: string;
   backgroundColor: string;
   textColor: string;
+  matchFee: number | null;
+  refereeFee: number | null;
+  monthlyFee: number | null;
+  currency: string;
 }
 
 export default function AdminPage() {
   const { tenantId } = useTenant();
   const { token } = useAuth();
-  const [tab, setTab] = useState<'members' | 'branding'>('members');
+  const [tab, setTab] = useState<'members' | 'branding' | 'pricing'>('members');
 
   // Members state
   const [members, setMembers] = useState<Member[]>([]);
@@ -44,6 +48,12 @@ export default function AdminPage() {
   const [brandingMsg, setBrandingMsg] = useState('');
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoRef = useRef<HTMLInputElement>(null);
+
+  // Pricing state
+  const [pricingForm, setPricingForm] = useState({
+    matchFee: '', refereeFee: '', monthlyFee: '', currency: 'UYU',
+  });
+  const [pricingMsg, setPricingMsg] = useState('');
 
   useEffect(() => {
     if (!tenantId || !token) return;
@@ -71,6 +81,12 @@ export default function AdminPage() {
         accentColor: data.accentColor,
         backgroundColor: data.backgroundColor,
         textColor: data.textColor,
+      });
+      setPricingForm({
+        matchFee: data.matchFee?.toString() || '',
+        refereeFee: data.refereeFee?.toString() || '',
+        monthlyFee: data.monthlyFee?.toString() || '',
+        currency: data.currency || 'UYU',
       });
     } catch (err: any) { setBrandingMsg(err.message); }
   }
@@ -134,6 +150,22 @@ export default function AdminPage() {
     }
   }
 
+  async function handleSavePricing(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tenantId || !token) return;
+    setPricingMsg('');
+    try {
+      await adminApi.updateSettings(tenantId, token, {
+        matchFee: pricingForm.matchFee || null,
+        refereeFee: pricingForm.refereeFee || null,
+        monthlyFee: pricingForm.monthlyFee || null,
+        currency: pricingForm.currency,
+      });
+      setPricingMsg('Precios guardados');
+      loadSettings();
+    } catch (err: any) { setPricingMsg(err.message); }
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Administrar Liga</h1>
@@ -155,6 +187,14 @@ export default function AdminPage() {
           onClick={() => setTab('branding')}
         >
           Marca y Colores
+        </button>
+        <button
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            tab === 'pricing' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+          onClick={() => setTab('pricing')}
+        >
+          Precios
         </button>
       </div>
 
@@ -257,7 +297,7 @@ export default function AdminPage() {
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Logo de la Liga</h3>
               <div className="flex items-center gap-4">
                 {settings?.logoUrl ? (
-                  <img src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${settings.logoUrl}`}
+                  <img src={assetUrl(settings.logoUrl)}
                     alt="Logo" className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
                 ) : (
                   <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xl font-bold">
@@ -323,6 +363,86 @@ export default function AdminPage() {
             </div>
 
             <button type="submit" className="btn-primary">Guardar Cambios</button>
+          </form>
+        </div>
+      )}
+
+      {/* Pricing Tab */}
+      {tab === 'pricing' && (
+        <div className="max-w-lg">
+          {pricingMsg && (
+            <div className="p-3 rounded-lg text-sm bg-green-50 text-green-700 mb-4">{pricingMsg}</div>
+          )}
+
+          <form onSubmit={handleSavePricing} className="card space-y-5">
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-1">Precios de la Liga</h3>
+              <p className="text-sm text-gray-500 mb-4">Configura cuanto se cobra por los servicios de la liga.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Moneda</label>
+              <select className="input-field w-32" value={pricingForm.currency}
+                onChange={e => setPricingForm(p => ({ ...p, currency: e.target.value }))}>
+                <option value="UYU">UYU (Pesos)</option>
+                <option value="USD">USD (Dolares)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Costo por partido (por equipo)</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-400">{pricingForm.currency}</span>
+                <input type="number" step="10" min="0" className="input-field"
+                  placeholder="Ej: 500" value={pricingForm.matchFee}
+                  onChange={e => setPricingForm(p => ({ ...p, matchFee: e.target.value }))} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Lo que paga cada equipo por jugar un partido</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Costo del arbitro (por partido)</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-400">{pricingForm.currency}</span>
+                <input type="number" step="10" min="0" className="input-field"
+                  placeholder="Ej: 800" value={pricingForm.refereeFee}
+                  onChange={e => setPricingForm(p => ({ ...p, refereeFee: e.target.value }))} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Cuanto se le paga al arbitro por partido</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cuota mensual (por equipo)</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-400">{pricingForm.currency}</span>
+                <input type="number" step="10" min="0" className="input-field"
+                  placeholder="Ej: 2000" value={pricingForm.monthlyFee}
+                  onChange={e => setPricingForm(p => ({ ...p, monthlyFee: e.target.value }))} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Cuota fija mensual que pagan los equipos</p>
+            </div>
+
+            {/* Summary */}
+            {(pricingForm.matchFee || pricingForm.refereeFee) && (
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="text-sm font-semibold text-blue-900 mb-2">Resumen por fecha</h4>
+                <div className="text-sm text-blue-700 space-y-1">
+                  {pricingForm.matchFee && (
+                    <p>Ingreso cancha: {pricingForm.currency} {Number(pricingForm.matchFee) * 2} (2 equipos x {pricingForm.matchFee})</p>
+                  )}
+                  {pricingForm.refereeFee && (
+                    <p>Gasto arbitro: -{pricingForm.currency} {pricingForm.refereeFee}</p>
+                  )}
+                  {pricingForm.matchFee && pricingForm.refereeFee && (
+                    <p className="font-bold pt-1 border-t border-blue-200">
+                      Neto por partido: {pricingForm.currency} {Number(pricingForm.matchFee) * 2 - Number(pricingForm.refereeFee)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <button type="submit" className="btn-primary">Guardar Precios</button>
           </form>
         </div>
       )}

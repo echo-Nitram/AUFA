@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { tenantApi } from '@/lib/api';
+import { tenantApi, assetUrl } from '@/lib/api';
 import { PublicLeagueProvider } from '@/lib/public-league-context';
 
 interface PublicTenant {
@@ -75,7 +75,7 @@ export default function PublicLeagueLayout({ children }: { children: React.React
             <div className="flex items-center justify-between">
               <Link href={basePath} className="flex items-center gap-3">
                 {tenant.logoUrl ? (
-                  <img src={tenant.logoUrl} alt={tenant.name} className="w-10 h-10 rounded-lg bg-white/10" />
+                  <img src={assetUrl(tenant.logoUrl)} alt={tenant.name} className="w-10 h-10 rounded-lg bg-white/10 object-cover" />
                 ) : (
                   <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center font-bold text-xl">
                     {tenant.name[0]}

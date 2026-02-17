@@ -256,6 +256,7 @@ export async function getAdminSettings(req: AuthRequest, res: Response) {
         primaryColor: true, secondaryColor: true, accentColor: true,
         backgroundColor: true, textColor: true,
         commissionRate: true,
+        matchFee: true, refereeFee: true, monthlyFee: true, currency: true,
       },
     });
 
@@ -272,7 +273,11 @@ export async function getAdminSettings(req: AuthRequest, res: Response) {
 
 export async function updateAdminSettings(req: AuthRequest, res: Response) {
   try {
-    const { name, primaryColor, secondaryColor, accentColor, backgroundColor, textColor, logoUrl, bannerUrl } = req.body;
+    const {
+      name, primaryColor, secondaryColor, accentColor, backgroundColor, textColor,
+      logoUrl, bannerUrl,
+      matchFee, refereeFee, monthlyFee, currency,
+    } = req.body;
 
     const tenant = await prisma.tenant.update({
       where: { id: req.tenantId! },
@@ -285,6 +290,10 @@ export async function updateAdminSettings(req: AuthRequest, res: Response) {
         ...(textColor && { textColor }),
         ...(logoUrl !== undefined && { logoUrl }),
         ...(bannerUrl !== undefined && { bannerUrl }),
+        ...(matchFee !== undefined && { matchFee: matchFee ? parseFloat(matchFee) : null }),
+        ...(refereeFee !== undefined && { refereeFee: refereeFee ? parseFloat(refereeFee) : null }),
+        ...(monthlyFee !== undefined && { monthlyFee: monthlyFee ? parseFloat(monthlyFee) : null }),
+        ...(currency && { currency }),
       },
     });
 

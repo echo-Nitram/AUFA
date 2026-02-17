@@ -144,6 +144,12 @@ model Tenant {
   bankAccount         String?
   commissionRate      Float           @default(0.04) // 4% AUFA commission
 
+  // League pricing config (per-match costs in local currency)
+  matchFee            Float?  // Costo por partido por equipo
+  refereeFee          Float?  // Costo del arbitro por partido
+  monthlyFee          Float?  // Cuota mensual por equipo
+  currency            String  @default("UYU")
+
   // Members
   members         TenantMember[]
 
@@ -228,6 +234,11 @@ model Tournament {
   maxSubstitutions    Int?             // null = unlimited
   playersPerTeam      Int
   minPlayersToStart   Int
+
+  // Category / restrictions
+  minAge              Int?             // Minimum age (calculated from dateOfBirth)
+  maxAge              Int?             // Maximum age
+  gender              String?          // MALE, FEMALE, MIXED, null=any
 
   // Registration
   maxTeams            Int?

@@ -20,6 +20,10 @@ const createTournamentSchema = z.object({
   depositAmount: z.number().nullable().default(null),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  // Category restrictions
+  minAge: z.number().int().min(1).max(99).nullable().default(null),
+  maxAge: z.number().int().min(1).max(99).nullable().default(null),
+  gender: z.enum(['MALE', 'FEMALE', 'MIXED']).nullable().default(null),
 });
 
 export async function createTournament(req: AuthRequest, res: Response) {

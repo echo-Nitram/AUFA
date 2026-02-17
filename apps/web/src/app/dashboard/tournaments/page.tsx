@@ -20,6 +20,8 @@ export default function TournamentsPage() {
     name: '', gameType: 'F5', pointsForWin: 3, pointsForDraw: 1, pointsForLoss: 0,
     fairPlayBonusPoints: 0, playersPerTeam: 5, minPlayersToStart: 4, maxTeams: 12,
     registrationFee: 0, depositAmount: 0,
+    minAge: '' as string | number, maxAge: '' as string | number, gender: '' as string,
+    startDate: '', endDate: '',
   });
 
   function showMsg(text: string, type: 'info' | 'error' | 'success' = 'info') {
@@ -45,7 +47,22 @@ export default function TournamentsPage() {
     if (!tenantId || !token) return;
     try {
       await leagueApi.createTournament(tenantId, token, {
-        ...form,
+        name: form.name,
+        gameType: form.gameType,
+        pointsForWin: form.pointsForWin,
+        pointsForDraw: form.pointsForDraw,
+        pointsForLoss: form.pointsForLoss,
+        fairPlayBonusPoints: form.fairPlayBonusPoints,
+        playersPerTeam: form.playersPerTeam,
+        minPlayersToStart: form.minPlayersToStart,
+        maxTeams: form.maxTeams || null,
+        registrationFee: form.registrationFee || null,
+        depositAmount: form.depositAmount || null,
+        minAge: form.minAge ? Number(form.minAge) : null,
+        maxAge: form.maxAge ? Number(form.maxAge) : null,
+        gender: form.gender || null,
+        startDate: form.startDate || undefined,
+        endDate: form.endDate || undefined,
         tiebreakerOrder: ['GOAL_DIFFERENCE', 'GOALS_FOR', 'FAIR_PLAY'],
         maxSubstitutions: null,
       });
@@ -162,6 +179,53 @@ export default function TournamentsPage() {
               <input type="number" className="input-field" value={form.maxTeams} onChange={e => setForm(p => ({ ...p, maxTeams: +e.target.value }))} />
             </div>
           </div>
+
+          {/* Category & Dates */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Categoria y Fechas</h4>
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Edad minima</label>
+                <input type="number" min="1" max="99" className="input-field" placeholder="Sin limite"
+                  value={form.minAge} onChange={e => setForm(p => ({ ...p, minAge: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Edad maxima</label>
+                <input type="number" min="1" max="99" className="input-field" placeholder="Sin limite"
+                  value={form.maxAge} onChange={e => setForm(p => ({ ...p, maxAge: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Genero</label>
+                <select className="input-field" value={form.gender} onChange={e => setForm(p => ({ ...p, gender: e.target.value }))}>
+                  <option value="">Sin restriccion</option>
+                  <option value="MALE">Masculino</option>
+                  <option value="FEMALE">Femenino</option>
+                  <option value="MIXED">Mixto</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Inscripcion ($)</label>
+                <input type="number" min="0" className="input-field" placeholder="0"
+                  value={form.registrationFee} onChange={e => setForm(p => ({ ...p, registrationFee: +e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha inicio</label>
+                <input type="date" className="input-field"
+                  value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha fin</label>
+                <input type="date" className="input-field"
+                  value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sena ($)</label>
+                <input type="number" min="0" className="input-field" placeholder="0"
+                  value={form.depositAmount} onChange={e => setForm(p => ({ ...p, depositAmount: +e.target.value }))} />
+              </div>
+            </div>
+          </div>
+
           <button type="submit" className="btn-primary">Crear Torneo</button>
         </form>
       )}
@@ -184,6 +248,8 @@ export default function TournamentsPage() {
                     </div>
                     <p className="text-sm text-gray-500">
                       {gameLabels[t.gameType]} &middot; {t._count?.tournamentTeams || 0} equipos &middot; {t._count?.matches || 0} partidos
+                      {t.minAge || t.maxAge ? ` · ${t.minAge || '?'}-${t.maxAge || '?'} años` : ''}
+                      {t.gender ? ` · ${t.gender === 'MALE' ? 'Masc' : t.gender === 'FEMALE' ? 'Fem' : 'Mixto'}` : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">

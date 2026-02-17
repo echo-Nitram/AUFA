@@ -1,5 +1,12 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+/** Convert a relative upload path (e.g. /uploads/file.jpg) to a full URL */
+export function assetUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return `${API_URL}${path}`;
+}
+
 interface FetchOptions extends RequestInit {
   token?: string;
   tenantId?: string;

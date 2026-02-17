@@ -165,6 +165,10 @@ export async function enterMatchData(req: AuthRequest, res: Response) {
       const homeResult = data.homeScore > data.awayScore ? 'W' : data.homeScore < data.awayScore ? 'L' : 'D';
       const tournament = match.tournament;
 
+      // Fair play bonus: award extra points if score >= 4 (out of 5)
+      const homeFPBonus = (tournament.fairPlayBonusPoints > 0 && data.homeFairPlay >= 4) ? tournament.fairPlayBonusPoints : 0;
+      const awayFPBonus = (tournament.fairPlayBonusPoints > 0 && data.awayFairPlay >= 4) ? tournament.fairPlayBonusPoints : 0;
+
       // Home team standings
       await tx.tournamentTeam.update({
         where: { tournamentId_teamId: { tournamentId: match.tournamentId, teamId: match.homeTeamId } },
@@ -177,9 +181,9 @@ export async function enterMatchData(req: AuthRequest, res: Response) {
           goalsAgainst: { increment: data.awayScore },
           points: {
             increment:
-              homeResult === 'W' ? tournament.pointsForWin :
+              (homeResult === 'W' ? tournament.pointsForWin :
               homeResult === 'D' ? tournament.pointsForDraw :
-              tournament.pointsForLoss,
+              tournament.pointsForLoss) + homeFPBonus,
           },
           fairPlaySum: { increment: data.homeFairPlay },
           fairPlayCount: { increment: 1 },
@@ -199,9 +203,9 @@ export async function enterMatchData(req: AuthRequest, res: Response) {
           goalsAgainst: { increment: data.homeScore },
           points: {
             increment:
-              awayResult === 'W' ? tournament.pointsForWin :
+              (awayResult === 'W' ? tournament.pointsForWin :
               awayResult === 'D' ? tournament.pointsForDraw :
-              tournament.pointsForLoss,
+              tournament.pointsForLoss) + awayFPBonus,
           },
           fairPlaySum: { increment: data.awayFairPlay },
           fairPlayCount: { increment: 1 },

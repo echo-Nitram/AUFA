@@ -13,18 +13,10 @@ export async function apiFetch<T = any>(path: string, options: FetchOptions = {}
     ...((customHeaders as Record<string, string>) || {}),
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (tenantId) headers['X-Tenant-ID'] = tenantId;
 
-  if (tenantId) {
-    headers['X-Tenant-ID'] = tenantId;
-  }
-
-  const response = await fetch(`${API_URL}${path}`, {
-    ...rest,
-    headers,
-  });
+  const response = await fetch(`${API_URL}${path}`, { ...rest, headers });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Error de red' }));
@@ -34,65 +26,83 @@ export async function apiFetch<T = any>(path: string, options: FetchOptions = {}
   return response.json();
 }
 
-// Auth API
+// Auth
 export const authApi = {
-  login: (email: string, password: string) =>
-    apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-
+  lookupCI: (ci: string) => apiFetch(`/api/auth/lookup/${ci}`),
+  login: (identifier: string, password: string) =>
+    apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ identifier, password }) }),
   register: (data: any) =>
     apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify(data) }),
-
-  me: (token: string) =>
-    apiFetch('/api/auth/me', { token }),
-
-  refresh: (refreshToken: string) =>
-    apiFetch('/api/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) }),
+  me: (token: string) => apiFetch('/api/auth/me', { token }),
 };
 
-// Tenant API
+// Tenant
 export const tenantApi = {
-  getCurrent: (tenantId: string) =>
-    apiFetch('/api/tenants/resolve/current', { tenantId }),
-
-  list: (token: string) =>
-    apiFetch('/api/tenants', { token }),
-
-  create: (token: string, data: any) =>
-    apiFetch('/api/tenants', { token, method: 'POST', body: JSON.stringify(data) }),
+  getCurrent: (tenantId: string) => apiFetch('/api/tenants/resolve/current', { tenantId }),
+  list: (token: string) => apiFetch('/api/tenants', { token }),
 };
 
-// League API (tenant-scoped)
+// League
 export const leagueApi = {
-  listTournaments: (tenantId: string) =>
-    apiFetch('/api/league/tournaments', { tenantId }),
-
-  getTournament: (tenantId: string, id: string) =>
-    apiFetch(`/api/league/tournaments/${id}`, { tenantId }),
-
+  listTournaments: (tenantId: string) => apiFetch('/api/league/tournaments', { tenantId }),
+  getTournament: (tenantId: string, id: string) => apiFetch(`/api/league/tournaments/${id}`, { tenantId }),
+  createTournament: (tenantId: string, token: string, data: any) =>
+    apiFetch('/api/league/tournaments', { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
   getStandings: (tenantId: string, tournamentId: string) =>
     apiFetch(`/api/league/tournaments/${tournamentId}/standings`, { tenantId }),
-
-  listTeams: (tenantId: string) =>
-    apiFetch('/api/league/teams', { tenantId }),
-
-  getTeam: (tenantId: string, id: string) =>
-    apiFetch(`/api/league/teams/${id}`, { tenantId }),
+  listTeams: (tenantId: string) => apiFetch('/api/league/teams', { tenantId }),
+  getTeam: (tenantId: string, id: string) => apiFetch(`/api/league/teams/${id}`, { tenantId }),
+  createTeam: (tenantId: string, token: string, data: any) =>
+    apiFetch('/api/league/teams', { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
+  addPlayerToTeam: (tenantId: string, token: string, teamId: string, data: any) =>
+    apiFetch(`/api/league/teams/${teamId}/players`, { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
+  registerTeamInTournament: (tenantId: string, token: string, tournamentId: string, teamId: string) =>
+    apiFetch(`/api/league/tournaments/${tournamentId}/register/${teamId}`, { tenantId, token, method: 'POST' }),
 };
 
-// Match API
+// Match
 export const matchApi = {
-  listByTournament: (tenantId: string, tournamentId: string, matchday?: number) =>
-    apiFetch(`/api/matches/tournament/${tournamentId}${matchday ? `?matchday=${matchday}` : ''}`, { tenantId }),
-
-  getMatch: (tenantId: string, id: string) =>
-    apiFetch(`/api/matches/${id}`, { tenantId }),
+  listByTournament: (tenantId: string, tournamentId: string) =>
+    apiFetch(`/api/matches/tournament/${tournamentId}`, { tenantId }),
+  getMatch: (tenantId: string, id: string) => apiFetch(`/api/matches/${id}`, { tenantId }),
+  enterMatchData: (tenantId: string, token: string, matchId: string, data: any) =>
+    apiFetch(`/api/matches/${matchId}/data`, { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
 };
 
-// AUFA ID API
-export const aufaIdApi = {
-  lookup: (ci: string) =>
-    apiFetch(`/api/aufa-id/lookup/${ci}`),
+// Fixture
+export const fixtureApi = {
+  generate: (tenantId: string, token: string, tournamentId: string, data?: any) =>
+    apiFetch(`/api/fixtures/generate/${tournamentId}`, { tenantId, token, method: 'POST', body: JSON.stringify(data || {}) }),
+};
 
-  getPassport: (playerId: string) =>
-    apiFetch(`/api/aufa-id/passport/${playerId}`),
+// AUFA ID
+export const aufaIdApi = {
+  lookup: (ci: string) => apiFetch(`/api/aufa-id/lookup/${ci}`),
+  getPassport: (playerId: string) => apiFetch(`/api/aufa-id/passport/${playerId}`),
+};
+
+// Treasury
+export const treasuryApi = {
+  listOrders: (tenantId: string, token: string) => apiFetch('/api/treasury/orders', { tenantId, token }),
+  getSummary: (tenantId: string, token: string) => apiFetch('/api/treasury/summary', { tenantId, token }),
+  generateMatchdayOrders: (tenantId: string, token: string, data: any) =>
+    apiFetch('/api/treasury/orders/generate-matchday', { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
+  processPayment: (tenantId: string, token: string, orderId: string) =>
+    apiFetch(`/api/treasury/orders/${orderId}/pay`, { tenantId, token, method: 'POST', body: JSON.stringify({}) }),
+};
+
+// Tribunal
+export const tribunalApi = {
+  listSanctions: (tenantId: string, token: string, params?: string) =>
+    apiFetch(`/api/tribunal/sanctions${params ? `?${params}` : ''}`, { tenantId, token }),
+  getPending: (tenantId: string, token: string) => apiFetch('/api/tribunal/pending', { tenantId, token }),
+  resolve: (tenantId: string, token: string, sanctionId: string, data: any) =>
+    apiFetch(`/api/tribunal/sanctions/${sanctionId}/resolve`, { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
+};
+
+// Stats
+export const statsApi = {
+  topScorers: (tenantId: string, tournamentId: string) => apiFetch(`/api/stats/scorers/${tournamentId}`, { tenantId }),
+  cardsLeaders: (tenantId: string, tournamentId: string) => apiFetch(`/api/stats/cards/${tournamentId}`, { tenantId }),
+  fairPlay: (tenantId: string, tournamentId: string) => apiFetch(`/api/stats/fairplay/${tournamentId}`, { tenantId }),
 };

@@ -122,16 +122,6 @@ export async function checkEligibility(req: AuthRequest, res: Response) {
     }
 
     // Check active sanctions in this league
-    const activeSanction = await prisma.sanction.findFirst({
-      where: {
-        playerId,
-        tenantId: req.tenantId!,
-        isActive: true,
-        matchesServed: { lt: prisma.sanction.fields?.matchesSuspended as any },
-      },
-    });
-
-    // Direct query for active sanctions where matchesServed < matchesSuspended
     const activeSanctions = await prisma.sanction.findMany({
       where: {
         playerId,

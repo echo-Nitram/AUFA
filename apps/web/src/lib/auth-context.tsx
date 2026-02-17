@@ -10,13 +10,14 @@ interface User {
   role: string;
   aufaId?: string;
   ci?: string;
+  playerId?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -40,20 +41,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (savedToken) {
       authApi.me(savedToken)
         .then((data) => {
-          setUser({ id: data.id, email: data.email, fullName: data.player?.fullName || data.email, role: data.role });
+          setUser({
+            id: data.id,
+            email: data.email,
+            fullName: data.player?.fullName || data.email,
+            role: data.role,
+            playerId: data.playerId,
+          });
           setToken(savedToken);
         })
-        .catch(() => {
-          logout();
-        })
+        .catch(() => logout())
         .finally(() => setIsLoading(false));
     } else {
       setIsLoading(false);
     }
   }, [logout]);
 
-  const login = async (email: string, password: string) => {
-    const response = await authApi.login(email, password);
+  const login = async (identifier: string, password: string) => {
+    const response = await authApi.login(identifier, password);
     setUser(response.user);
     setToken(response.accessToken);
     localStorage.setItem('aufa_token', response.accessToken);

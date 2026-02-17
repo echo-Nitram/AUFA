@@ -14,6 +14,9 @@ import fixtureRoutes from './modules/fixture/fixture.routes';
 import treasuryRoutes from './modules/treasury/treasury.routes';
 import tribunalRoutes from './modules/tribunal/tribunal.routes';
 import refereeRoutes from './modules/referee/referee.routes';
+import uploadRoutes from './modules/upload/upload.routes';
+import statsRoutes from './modules/stats/stats.routes';
+import path from 'path';
 
 const app = express();
 
@@ -38,6 +41,11 @@ app.use('/api/fixtures', fixtureRoutes);
 app.use('/api/treasury', treasuryRoutes);
 app.use('/api/tribunal', tribunalRoutes);
 app.use('/api/referees', refereeRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/stats', statsRoutes);
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.resolve(env.upload.dir)));
 
 // 404 handler
 app.use((_req, res) => {

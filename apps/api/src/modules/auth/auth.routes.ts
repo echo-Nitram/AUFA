@@ -5,6 +5,7 @@ import { authenticate } from '../../middleware/auth';
 const router = Router();
 
 // Public routes
+router.get('/lookup/:ci', authController.lookupCI);
 router.post('/register', authController.registerPlayer);
 router.post('/login', authController.login);
 router.post('/refresh', authController.refreshToken);

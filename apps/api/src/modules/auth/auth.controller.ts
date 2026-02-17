@@ -16,7 +16,7 @@ const registerSchema = z.object({
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  identifier: z.string().min(1), // CI or email
   password: z.string(),
 });
 
@@ -30,20 +30,59 @@ function generateTokens(payload: { userId: string; email: string; role: string }
   return { accessToken, refreshToken };
 }
 
+/**
+ * CI lookup: checks if a player already exists in AUFA.
+ * Step 1 of the login/register flow.
+ */
+export async function lookupCI(req: Request, res: Response) {
+  try {
+    const { ci } = req.params;
+
+    const player = await prisma.player.findUnique({
+      where: { ci },
+      include: {
+        user: { select: { email: true } },
+        medicalClearances: {
+          where: { isActive: true, expiresAt: { gte: new Date() } },
+          take: 1,
+          select: { expiresAt: true },
+        },
+      },
+    });
+
+    if (!player) {
+      return res.json({ exists: false });
+    }
+
+    const email = player.user.email;
+    const [local, domain] = email.split('@');
+    const maskedEmail = local[0] + '***' + local[local.length - 1] + '@' + domain;
+
+    res.json({
+      exists: true,
+      fullName: player.fullName,
+      photoUrl: player.photoUrl,
+      maskedEmail,
+      hasMedicalClearance: player.medicalClearances.length > 0,
+    });
+  } catch (error) {
+    console.error('LookupCI error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
 export async function registerPlayer(req: Request, res: Response) {
   try {
     const data = registerSchema.parse(req.body);
 
-    // Check if CI already exists
     const existingPlayer = await prisma.player.findUnique({ where: { ci: data.ci } });
     if (existingPlayer) {
       return res.status(409).json({ error: 'Ya existe un jugador registrado con esta CI' });
     }
 
-    // Check email
     const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
     if (existingUser) {
-      return res.status(409).json({ error: 'El email ya está registrado' });
+      return res.status(409).json({ error: 'El email ya esta registrado' });
     }
 
     const passwordHash = await bcrypt.hash(data.password, 12);
@@ -80,28 +119,45 @@ export async function registerPlayer(req: Request, res: Response) {
         role: user.role,
         aufaId: user.player!.aufaId,
         ci: user.player!.ci,
+        playerId: user.player!.id,
       },
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Datos inválidos', details: error.errors });
+      return res.status(400).json({ error: 'Datos invalidos', details: error.errors });
     }
     console.error('Register error:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 }
 
+/**
+ * Login by CI or email + password.
+ */
 export async function login(req: Request, res: Response) {
   try {
     const data = loginSchema.parse(req.body);
 
-    const user = await prisma.user.findUnique({
-      where: { email: data.email },
-      include: { player: true },
-    });
+    const isEmail = data.identifier.includes('@');
+    let user: any;
+
+    if (isEmail) {
+      user = await prisma.user.findUnique({
+        where: { email: data.identifier },
+        include: { player: true },
+      });
+    } else {
+      const player = await prisma.player.findUnique({
+        where: { ci: data.identifier },
+        include: { user: true },
+      });
+      if (player) {
+        user = { ...player.user, player };
+      }
+    }
 
     if (!user || !(await bcrypt.compare(data.password, user.passwordHash))) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
+      return res.status(401).json({ error: 'Credenciales invalidas' });
     }
 
     const tokens = generateTokens({
@@ -119,11 +175,12 @@ export async function login(req: Request, res: Response) {
         role: user.role,
         aufaId: user.player?.aufaId,
         ci: user.player?.ci,
+        playerId: user.player?.id,
       },
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Datos inválidos', details: error.errors });
+      return res.status(400).json({ error: 'Datos invalidos', details: error.errors });
     }
     console.error('Login error:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
@@ -151,7 +208,7 @@ export async function refreshToken(req: Request, res: Response) {
 
     res.json(tokens);
   } catch {
-    res.status(401).json({ error: 'Refresh token inválido' });
+    res.status(401).json({ error: 'Refresh token invalido' });
   }
 }
 
@@ -178,6 +235,7 @@ export async function getMe(req: AuthRequest, res: Response) {
       email: user.email,
       role: user.role,
       player: user.player,
+      playerId: user.player?.id || null,
       tenants: user.tenantMembers.map((m) => ({
         tenantId: m.tenantId,
         tenantName: m.tenant.name,

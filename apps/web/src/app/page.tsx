@@ -38,7 +38,7 @@ export default function HomePage() {
             Futbol 5, 7 y 11. Todo en un solo lugar.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/register" className="btn-accent text-lg px-8 py-3">
+            <Link href="/crear-liga" className="btn-accent text-lg px-8 py-3">
               Crear mi Liga
             </Link>
             <Link href="/login" className="btn-outline border-white text-white hover:bg-white hover:text-blue-900 text-lg px-8 py-3">

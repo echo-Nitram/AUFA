@@ -272,6 +272,69 @@ export async function getMe(req: AuthRequest, res: Response) {
   }
 }
 
+/**
+ * Request password reset - generates a token (stored in-memory for simplicity)
+ */
+const resetTokens = new Map<string, { userId: string; expiresAt: Date }>();
+
+export async function forgotPassword(req: Request, res: Response) {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email requerido' });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    // Always return success (don't reveal if email exists)
+    if (!user) {
+      return res.json({ message: 'Si el email existe, recibiras instrucciones para resetear tu contrasena.' });
+    }
+
+    // Generate reset token
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    resetTokens.set(token, { userId: user.id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) }); // 1 hour
+
+    // In production, send email. For now, log it.
+    console.log(`[PASSWORD RESET] Token for ${email}: ${token}`);
+    console.log(`[PASSWORD RESET] URL: ${process.env.WEB_URL || 'http://localhost:3000'}/reset-password?token=${token}`);
+
+    res.json({
+      message: 'Si el email existe, recibiras instrucciones para resetear tu contrasena.',
+      // DEV ONLY: include token so it can be used without email
+      ...(env.nodeEnv !== 'production' && { devToken: token }),
+    });
+  } catch (error) {
+    console.error('ForgotPassword error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+export async function resetPassword(req: Request, res: Response) {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'Token y contrasena requeridos' });
+    if (password.length < 6) return res.status(400).json({ error: 'La contrasena debe tener al menos 6 caracteres' });
+
+    const resetData = resetTokens.get(token);
+    if (!resetData || resetData.expiresAt < new Date()) {
+      return res.status(400).json({ error: 'Token invalido o expirado' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    await prisma.user.update({
+      where: { id: resetData.userId },
+      data: { passwordHash },
+    });
+
+    resetTokens.delete(token);
+
+    res.json({ message: 'Contrasena actualizada exitosamente' });
+  } catch (error) {
+    console.error('ResetPassword error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
 export async function updateProfile(req: AuthRequest, res: Response) {
   try {
     const { phone, photoUrl } = req.body;

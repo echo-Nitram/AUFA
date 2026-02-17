@@ -26,6 +26,22 @@ export async function apiFetch<T = any>(path: string, options: FetchOptions = {}
   return response.json();
 }
 
+// Raw fetch for file uploads (no JSON content-type)
+async function apiUpload<T = any>(path: string, formData: FormData, token: string): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Error de red' }));
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
 // Auth
 export const authApi = {
   lookupCI: (ci: string) => apiFetch(`/api/auth/lookup/${ci}`),
@@ -34,6 +50,10 @@ export const authApi = {
   register: (data: any) =>
     apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   me: (token: string) => apiFetch('/api/auth/me', { token }),
+  requestPasswordReset: (email: string) =>
+    apiFetch('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (token: string, password: string) =>
+    apiFetch('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
 };
 
 // Tenant
@@ -41,6 +61,8 @@ export const tenantApi = {
   getCurrent: (tenantId: string) => apiFetch('/api/tenants/resolve/current', { tenantId }),
   getBySlug: (slug: string) => apiFetch(`/api/tenants/public/${slug}`),
   list: (token: string) => apiFetch('/api/tenants', { token }),
+  createSelfService: (data: any) =>
+    apiFetch('/api/tenants/create', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // League
@@ -59,6 +81,9 @@ export const leagueApi = {
     apiFetch(`/api/league/teams/${teamId}/players`, { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
   registerTeamInTournament: (tenantId: string, token: string, tournamentId: string, teamId: string) =>
     apiFetch(`/api/league/tournaments/${tournamentId}/register/${teamId}`, { tenantId, token, method: 'POST' }),
+  listVenues: (tenantId: string) => apiFetch('/api/league/venues', { tenantId }),
+  createVenue: (tenantId: string, token: string, data: any) =>
+    apiFetch('/api/league/venues', { tenantId, token, method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Match
@@ -136,4 +161,32 @@ export const statsApi = {
   topScorers: (tenantId: string, tournamentId: string) => apiFetch(`/api/stats/scorers/${tournamentId}`, { tenantId }),
   cardsLeaders: (tenantId: string, tournamentId: string) => apiFetch(`/api/stats/cards/${tournamentId}`, { tenantId }),
   fairPlay: (tenantId: string, tournamentId: string) => apiFetch(`/api/stats/fairplay/${tournamentId}`, { tenantId }),
+};
+
+// Uploads
+export const uploadApi = {
+  uploadFile: (token: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiUpload('/api/upload/file', fd, token);
+  },
+  uploadIdentity: (token: string, ciFront: File, ciBack: File, selfie: File) => {
+    const fd = new FormData();
+    fd.append('ciFront', ciFront);
+    fd.append('ciBack', ciBack);
+    fd.append('selfie', selfie);
+    return apiUpload('/api/upload/identity', fd, token);
+  },
+  uploadMedical: (token: string, document: File, issuedAt: string, expiresAt: string) => {
+    const fd = new FormData();
+    fd.append('document', document);
+    fd.append('issuedAt', issuedAt);
+    fd.append('expiresAt', expiresAt);
+    return apiUpload('/api/upload/medical', fd, token);
+  },
+  uploadLogo: (token: string, logo: File) => {
+    const fd = new FormData();
+    fd.append('logo', logo);
+    return apiUpload('/api/upload/logo', fd, token);
+  },
 };

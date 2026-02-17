@@ -9,6 +9,8 @@ router.get('/lookup/:ci', authController.lookupCI);
 router.post('/register', authController.registerPlayer);
 router.post('/login', authController.login);
 router.post('/refresh', authController.refreshToken);
+router.post('/forgot-password', authController.forgotPassword);
+router.post('/reset-password', authController.resetPassword);
 
 // Protected routes
 router.get('/me', authenticate, authController.getMe);

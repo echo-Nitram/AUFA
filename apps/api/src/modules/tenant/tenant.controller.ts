@@ -295,6 +295,90 @@ export async function updateAdminSettings(req: AuthRequest, res: Response) {
   }
 }
 
+/**
+ * Self-service: any authenticated or new user can create a league.
+ * Creates tenant + user (if new) + membership as ADMIN.
+ */
+export async function createTenantSelfService(req: Request, res: Response) {
+  try {
+    const schema = z.object({
+      leagueName: z.string().min(2).max(100),
+      slug: z.string().min(2).max(50).regex(/^[a-z0-9-]+$/, 'Solo letras minusculas, numeros y guiones'),
+      plan: z.enum(['BARRIO', 'LIGA_PRO', 'ENTERPRISE']).default('BARRIO'),
+      // Admin account
+      email: z.string().email(),
+      password: z.string().min(6),
+      fullName: z.string().min(2),
+    });
+
+    const data = schema.parse(req.body);
+
+    // Check slug
+    const existing = await prisma.tenant.findUnique({ where: { slug: data.slug } });
+    if (existing) {
+      return res.status(409).json({ error: 'Ese slug ya esta en uso. Elige otro.' });
+    }
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Create tenant
+      const tenant = await tx.tenant.create({
+        data: {
+          name: data.leagueName,
+          slug: data.slug,
+          subdomain: data.slug,
+          plan: data.plan,
+          primaryColor: '#1a56db',
+          secondaryColor: '#1e3a5f',
+          accentColor: '#f59e0b',
+        },
+      });
+
+      // Find or create user
+      let user = await tx.user.findUnique({ where: { email: data.email } });
+      if (!user) {
+        user = await tx.user.create({
+          data: { email: data.email, passwordHash, role: 'PLAYER' },
+        });
+        // Also create player record so they have full AUFA ID
+        await tx.player.create({
+          data: { userId: user.id, fullName: data.fullName, ci: `ORG-${Date.now()}` },
+        });
+      } else {
+        // Verify password for existing user
+        const valid = await bcrypt.compare(data.password, user.passwordHash);
+        if (!valid) {
+          throw new Error('INVALID_PASSWORD');
+        }
+      }
+
+      // Make user admin of this tenant
+      await tx.tenantMember.create({
+        data: { tenantId: tenant.id, userId: user.id, role: 'ADMIN' },
+      });
+
+      return { tenant, userId: user.id, email: user.email };
+    });
+
+    res.status(201).json({
+      message: 'Liga creada exitosamente',
+      tenant: result.tenant,
+      tenantId: result.tenant.id,
+      slug: result.tenant.slug,
+    });
+  } catch (error: any) {
+    if (error?.message === 'INVALID_PASSWORD') {
+      return res.status(401).json({ error: 'El email ya existe y la contrasena no coincide' });
+    }
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Datos invalidos', details: error.errors });
+    }
+    console.error('CreateTenantSelfService error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
 export async function getPublicTenant(req: Request, res: Response) {
   try {
     const { slug } = req.params;

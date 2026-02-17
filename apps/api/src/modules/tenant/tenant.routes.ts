@@ -12,6 +12,9 @@ router.get('/:id', authenticate, tenantController.getTenant);
 router.put('/:id', authenticate, requireSuperAdmin, tenantController.updateTenant);
 router.put('/:id/branding', authenticate, tenantController.updateBranding);
 
+// Self-service: create league (no auth required - creates account + tenant)
+router.post('/create', tenantController.createTenantSelfService);
+
 // Public: resolve tenant by slug (no auth)
 router.get('/public/:slug', tenantController.getPublicTenant);
 

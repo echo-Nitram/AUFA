@@ -145,10 +145,15 @@ export default function LoginPage() {
               <button type="submit" className="btn-primary w-full" disabled={isLoading}>
                 {isLoading ? 'Ingresando...' : 'Ingresar'}
               </button>
-              <button type="button" className="w-full text-sm text-gray-500 hover:text-gray-700"
-                onClick={() => { setStep('ci'); setPlayerInfo(null); setError(''); }}>
-                Volver
-              </button>
+              <div className="flex items-center justify-between">
+                <button type="button" className="text-sm text-gray-500 hover:text-gray-700"
+                  onClick={() => { setStep('ci'); setPlayerInfo(null); setError(''); }}>
+                  Volver
+                </button>
+                <Link href="/reset-password" className="text-sm text-primary hover:underline">
+                  Olvide mi contrasena
+                </Link>
+              </div>
             </form>
           )}
 

@@ -147,6 +147,34 @@ export async function updateBranding(req: AuthRequest, res: Response) {
   }
 }
 
+export async function getPublicTenant(req: Request, res: Response) {
+  try {
+    const { slug } = req.params;
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logoUrl: true,
+        bannerUrl: true,
+        primaryColor: true,
+        secondaryColor: true,
+        accentColor: true,
+      },
+    });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Liga no encontrada' });
+    }
+
+    res.json(tenant);
+  } catch (error) {
+    console.error('GetPublicTenant error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
 export async function getCurrentTenant(req: AuthRequest, res: Response) {
   try {
     const tenant = await prisma.tenant.findUnique({

@@ -14,6 +14,9 @@ export default function HomePage() {
           <span className="text-white text-2xl font-bold">AUFA</span>
         </div>
         <nav className="flex items-center gap-4">
+          <Link href="/liga/liga-demo" className="text-white/80 hover:text-white transition-colors">
+            Ver Liga Demo
+          </Link>
           <Link href="/login" className="text-white/80 hover:text-white transition-colors">
             Iniciar Sesion
           </Link>

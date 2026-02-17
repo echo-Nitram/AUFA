@@ -39,6 +39,7 @@ export const authApi = {
 // Tenant
 export const tenantApi = {
   getCurrent: (tenantId: string) => apiFetch('/api/tenants/resolve/current', { tenantId }),
+  getBySlug: (slug: string) => apiFetch(`/api/tenants/public/${slug}`),
   list: (token: string) => apiFetch('/api/tenants', { token }),
 };
 

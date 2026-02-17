@@ -8,6 +8,11 @@
     "packages/*"
   ],
   "scripts": {
+    "start": "node start.js",
+    "start:fast": "node start.js --fast",
+    "start:api": "node start.js --api",
+    "start:web": "node start.js --web",
+    "setup": "node start.js --setup-only",
     "dev": "npm run dev --workspaces --if-present",
     "dev:api": "npm run dev -w apps/api",
     "dev:web": "npm run dev -w apps/web",

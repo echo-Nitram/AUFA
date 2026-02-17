@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { tenantApi } from './api';
+import { useAuth } from './auth-context';
 
 interface TenantBranding {
   logoUrl?: string;
@@ -32,17 +33,14 @@ interface TenantContextType {
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export function TenantProvider({ children }: { children: ReactNode }) {
+  const { tenants: authTenants, isLoading: authLoading } = useAuth();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Step 1: Try to load tenantId from localStorage on mount
   useEffect(() => {
-    // Try to detect tenant from subdomain
     if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      const subdomain = hostname.split('.')[0];
-
-      // Check localStorage for saved tenant
       const savedTenantId = localStorage.getItem('aufa_tenant_id');
       if (savedTenantId) {
         setTenantId(savedTenantId);
@@ -51,6 +49,16 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  // Step 2: Auto-detect tenant from auth memberships when available
+  useEffect(() => {
+    if (!authLoading && !tenantId && authTenants.length > 0) {
+      const firstTenantId = authTenants[0].tenantId;
+      setTenantId(firstTenantId);
+      localStorage.setItem('aufa_tenant_id', firstTenantId);
+    }
+  }, [authTenants, authLoading, tenantId]);
+
+  // Step 3: Fetch full tenant data when tenantId changes
   useEffect(() => {
     if (tenantId) {
       localStorage.setItem('aufa_tenant_id', tenantId);

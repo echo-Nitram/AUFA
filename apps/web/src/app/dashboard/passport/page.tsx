@@ -26,10 +26,23 @@ export default function PassportPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
-    // TODO: Need player ID from auth context
-    setIsLoading(false);
+    if (!user?.playerId) {
+      setIsLoading(false);
+      return;
+    }
+    aufaIdApi.getPassport(user.playerId)
+      .then(setPassport)
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
   }, [user]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-gray-500">Cargando pasaporte...</div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -42,7 +55,7 @@ export default function PassportPage() {
             <div>
               <p className="text-xs text-blue-300 uppercase tracking-wider mb-1">AUFA ID</p>
               <p className="text-lg font-mono font-bold">
-                {passport?.aufaId || '---'}
+                {passport?.aufaId || user?.aufaId || '---'}
               </p>
             </div>
             <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center font-bold text-xl">
@@ -52,10 +65,10 @@ export default function PassportPage() {
 
           <div className="flex items-center gap-6 mb-6">
             <div className="w-20 h-20 bg-white/20 rounded-xl flex items-center justify-center text-3xl font-bold">
-              {user?.fullName?.[0] || '?'}
+              {passport?.fullName?.[0] || user?.fullName?.[0] || '?'}
             </div>
             <div>
-              <h2 className="text-2xl font-bold">{user?.fullName || 'Jugador'}</h2>
+              <h2 className="text-2xl font-bold">{passport?.fullName || user?.fullName || 'Jugador'}</h2>
               <p className="text-blue-200">{user?.email}</p>
             </div>
           </div>
@@ -64,14 +77,14 @@ export default function PassportPage() {
             <div>
               <p className="text-xs text-blue-300">Identidad</p>
               <p className="font-medium">
-                {passport?.identityStatus === 'APPROVED' ? 'Verificada' : 'Pendiente'}
+                {(passport?.identityStatus || 'PENDING') === 'APPROVED' ? 'Verificada' : 'Pendiente'}
               </p>
             </div>
             <div>
               <p className="text-xs text-blue-300">Ficha Medica</p>
               <p className="font-medium">
                 {passport?.medicalClearance
-                  ? `Vence: ${new Date(passport.medicalClearance.expiresAt).toLocaleDateString()}`
+                  ? `Vence: ${new Date(passport.medicalClearance.expiresAt).toLocaleDateString('es-UY')}`
                   : 'No cargada'}
               </p>
             </div>

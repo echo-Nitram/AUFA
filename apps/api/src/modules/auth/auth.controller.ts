@@ -220,6 +220,10 @@ export async function getMe(req: AuthRequest, res: Response) {
         player: {
           include: {
             medicalClearances: { where: { isActive: true }, orderBy: { expiresAt: 'desc' }, take: 1 },
+            teamPlayers: {
+              where: { isActive: true },
+              include: { team: { include: { tenant: { select: { id: true, name: true, slug: true } } } } },
+            },
           },
         },
         tenantMembers: { include: { tenant: { select: { id: true, name: true, slug: true } } } },
@@ -230,18 +234,37 @@ export async function getMe(req: AuthRequest, res: Response) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
+    // Build tenants list from memberships
+    const tenants = user.tenantMembers.map((m) => ({
+      tenantId: m.tenantId,
+      tenantName: m.tenant.name,
+      tenantSlug: m.tenant.slug,
+      role: m.role,
+    }));
+
+    // Also include tenants from team memberships (for players without admin roles)
+    if (user.player?.teamPlayers) {
+      const existingTenantIds = new Set(tenants.map((t) => t.tenantId));
+      for (const tp of user.player.teamPlayers) {
+        if (!existingTenantIds.has(tp.team.tenantId)) {
+          tenants.push({
+            tenantId: tp.team.tenantId,
+            tenantName: tp.team.tenant.name,
+            tenantSlug: tp.team.tenant.slug,
+            role: 'PLAYER',
+          });
+          existingTenantIds.add(tp.team.tenantId);
+        }
+      }
+    }
+
     res.json({
       id: user.id,
       email: user.email,
       role: user.role,
       player: user.player,
       playerId: user.player?.id || null,
-      tenants: user.tenantMembers.map((m) => ({
-        tenantId: m.tenantId,
-        tenantName: m.tenant.name,
-        tenantSlug: m.tenant.slug,
-        role: m.role,
-      })),
+      tenants,
     });
   } catch (error) {
     console.error('GetMe error:', error);

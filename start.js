@@ -193,25 +193,48 @@ async function checkPostgres() {
   }
 
   // Read DATABASE_URL from .env to test connection
+  let dbUrl = null;
   if (fileExists(ENV_API)) {
     const envContent = fs.readFileSync(ENV_API, 'utf-8');
     const match = envContent.match(/DATABASE_URL="?([^"\n]+)"?/);
-    if (match) {
-      const dbUrl = match[1];
-      // Test connection via prisma
-      const result = runSilent(`npx prisma db execute --stdin --url "${dbUrl}" <<< "SELECT 1"`, { cwd: API_DIR, timeout: 15000 });
-      if (result !== null) {
-        ok('Conexion a PostgreSQL exitosa');
-        return true;
-      }
+    if (match) dbUrl = match[1];
+  }
+
+  if (dbUrl) {
+    // Method 1: Try psql -c (works on all platforms)
+    const psqlTest = runSilent(`psql "${dbUrl}" -c "SELECT 1"`, { timeout: 10000 });
+    if (psqlTest !== null) {
+      ok('Conexion a PostgreSQL exitosa');
+      return true;
+    }
+
+    // Method 2: Use a small inline Node script (no shell-specific syntax)
+    const inlineScript = `
+      const { execSync } = require('child_process');
+      try {
+        execSync('npx prisma db execute --stdin', {
+          input: 'SELECT 1;',
+          cwd: ${JSON.stringify(API_DIR)},
+          stdio: ['pipe', 'pipe', 'pipe'],
+          timeout: 15000,
+        });
+        process.exit(0);
+      } catch { process.exit(1); }
+    `;
+    const prismaTest = runSilent(`node -e "${inlineScript.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`, { timeout: 20000 });
+    if (prismaTest !== null) {
+      ok('Conexion a PostgreSQL exitosa (via Prisma)');
+      return true;
     }
   }
 
   // If we can't test, just warn
-  warn('No se pudo verificar la conexion a PostgreSQL.');
+  warn('No se pudo verificar la conexion a PostgreSQL automaticamente.');
   info('Asegurate de que PostgreSQL esta corriendo y los datos en .env son correctos.');
+  info('Podes verificar manualmente con:');
+  info(`  psql "${dbUrl || 'postgresql://aufa:aufa_secret@localhost:5432/aufa'}" -c "SELECT 1"`);
   info('Si usas Docker:  docker compose up -d postgres');
-  const answer = await ask('Continuar de todos modos? (s/n)');
+  const answer = await ask('PostgreSQL esta corriendo? Continuar? (s/n)');
   if (answer !== 's' && answer !== 'si') {
     log('\n  Arranca PostgreSQL y volve a correr este script.\n');
     process.exit(0);
@@ -330,20 +353,28 @@ function setupPrisma() {
 async function seedDatabase() {
   step('6/7', 'Verificando datos de prueba...');
 
-  // Check if seed data already exists by trying to query
-  // We do this by checking if prisma can find users
-  const checkCmd = `npx tsx -e "
-    const { PrismaClient } = require('@prisma/client');
-    const p = new PrismaClient();
-    p.user.count().then(c => { console.log(c); p.\\$disconnect(); }).catch(() => { console.log(0); p.\\$disconnect(); });
-  "`;
+  // Check if seed data already exists by writing a temp script and running it
+  // This avoids shell quoting issues across Windows/Mac/Linux
+  const checkScript = path.join(API_DIR, '_check_seed.js');
+  try {
+    fs.writeFileSync(checkScript, `
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+p.user.count()
+  .then(c => { console.log(c); return p.$disconnect(); })
+  .catch(() => { console.log(0); return p.$disconnect(); });
+`);
+    const userCount = runSilent('node _check_seed.js', { cwd: API_DIR, timeout: 15000 });
+    const count = parseInt(userCount || '0');
 
-  const userCount = runSilent(checkCmd, { cwd: API_DIR, timeout: 15000 });
-  const count = parseInt(userCount || '0');
-
-  if (count > 0 && !FLAG_RESET_DB) {
-    ok(`Base de datos tiene ${count} usuarios. Seed no es necesario.`);
-    return;
+    if (count > 0 && !FLAG_RESET_DB) {
+      ok(`Base de datos tiene ${count} usuarios. Seed no es necesario.`);
+      return;
+    }
+  } catch {
+    // If check fails, just run seed to be safe
+  } finally {
+    try { fs.unlinkSync(checkScript); } catch { /* ignore */ }
   }
 
   info('Cargando datos de prueba (jugadores, equipos, torneo demo)...');

@@ -22,7 +22,9 @@
     "lint": "npm run lint --workspaces --if-present",
     "db:generate": "npm run db:generate -w apps/api",
     "db:push": "npm run db:push -w apps/api",
-    "db:seed": "npm run db:seed -w apps/api"
+    "db:seed": "npm run db:seed -w apps/api",
+    "start:mobile": "npm run start -w apps/mobile",
+    "dev:mobile": "npm run start -w apps/mobile"
   },
   "engines": {
     "node": ">=18.0.0"

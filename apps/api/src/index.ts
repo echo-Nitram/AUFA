@@ -22,7 +22,18 @@ const app = express();
 
 // Global middleware
 app.use(helmet());
-app.use(cors({ origin: env.webUrl, credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    // Allow the configured web URL
+    if (origin === env.webUrl) return callback(null, true);
+    // In development, allow any localhost origin
+    if (env.nodeEnv === 'development' && origin.includes('localhost')) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 

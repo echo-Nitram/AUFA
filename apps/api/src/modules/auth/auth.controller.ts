@@ -235,8 +235,15 @@ export async function getMe(req: AuthRequest, res: Response) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    // Build tenants list from memberships
-    const tenants = user.tenantMembers.map((m) => ({
+    // Leagues this user belongs to, either as staff or just as a player.
+    // The role is widened beyond TenantRole because a player is not a
+    // TenantMember: they reach the league through their team.
+    const tenants: {
+      tenantId: string;
+      tenantName: string;
+      tenantSlug: string;
+      role: 'ADMIN' | 'OPERATOR' | 'PLAYER';
+    }[] = user.tenantMembers.map((m) => ({
       tenantId: m.tenantId,
       tenantName: m.tenant.name,
       tenantSlug: m.tenant.slug,

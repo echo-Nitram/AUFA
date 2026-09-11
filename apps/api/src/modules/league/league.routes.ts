@@ -19,11 +19,11 @@ router.get('/tournaments/:id/standings', leagueController.getStandings);
 router.post('/teams', authenticate, requireTenantAdmin, leagueController.createTeam);
 router.get('/teams', leagueController.listTeams);
 router.get('/teams/:id', leagueController.getTeam);
-router.post('/teams/:teamId/players', authenticate, leagueController.addPlayerToTeam);
-router.delete('/teams/:teamId/players/:playerId', authenticate, leagueController.removePlayerFromTeam);
+router.post('/teams/:teamId/players', authenticate, requireTenantAdmin, leagueController.addPlayerToTeam);
+router.delete('/teams/:teamId/players/:playerId', authenticate, requireTenantAdmin, leagueController.removePlayerFromTeam);
 
 // Invite link for fichaje
-router.post('/teams/:teamId/invite', authenticate, leagueController.generateInviteLink);
+router.post('/teams/:teamId/invite', authenticate, requireTenantAdmin, leagueController.generateInviteLink);
 router.post('/teams/join/:inviteCode', authenticate, leagueController.joinTeamByInvite);
 
 // Tournament registration

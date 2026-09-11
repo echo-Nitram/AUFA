@@ -39,8 +39,8 @@ export default function PassportPage() {
   const [medicalDates, setMedicalDates] = useState({ issuedAt: '', expiresAt: '' });
 
   function loadPassport() {
-    if (!user?.playerId) { setIsLoading(false); return; }
-    aufaIdApi.getPassport(user.playerId)
+    if (!user?.playerId || !token) { setIsLoading(false); return; }
+    aufaIdApi.getPassport(user.playerId, token)
       .then(setPassport)
       .catch(console.error)
       .finally(() => setIsLoading(false));

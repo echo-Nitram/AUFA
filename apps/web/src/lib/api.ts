@@ -122,8 +122,10 @@ export const fixtureApi = {
 
 // AUFA ID
 export const aufaIdApi = {
-  lookup: (ci: string) => apiFetch(`/api/aufa-id/lookup/${ci}`),
-  getPassport: (playerId: string) => apiFetch(`/api/aufa-id/passport/${playerId}`),
+  lookup: (ci: string, token: string, tenantId: string) =>
+    apiFetch(`/api/aufa-id/lookup/${ci}`, { token, tenantId }),
+  getPassport: (playerId: string, token: string) =>
+    apiFetch(`/api/aufa-id/passport/${playerId}`, { token }),
 };
 
 // Treasury

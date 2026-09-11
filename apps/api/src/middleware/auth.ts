@@ -10,6 +10,8 @@ export interface AuthRequest extends Request {
     role: string;
   };
   tenantId?: string;
+  /** True when the tenant came from the host, false when it came from the X-Tenant-ID header. */
+  tenantVerifiedByHost?: boolean;
 }
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {

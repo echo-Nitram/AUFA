@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as matchController from './match.controller';
 import { authenticate } from '../../middleware/auth';
-import { resolveTenant, requireTenant, requireTenantAdmin } from '../../middleware/tenant';
+import { resolveTenant, requireTenant, requireTenantAdmin, requireTenantMember } from '../../middleware/tenant';
 
 const router = Router();
 
@@ -11,8 +11,9 @@ router.use(resolveTenant, requireTenant);
 router.get('/tournament/:tournamentId', matchController.listMatches);
 router.get('/:id', matchController.getMatch);
 
-// Get match rosters with eligibility for lineup selection
-router.get('/:id/rosters', authenticate, matchController.getMatchRosters);
+// Get match rosters with eligibility for lineup selection.
+// Exposes medical and identity status, so it is restricted to league staff.
+router.get('/:id/rosters', authenticate, requireTenantMember, matchController.getMatchRosters);
 
 // Match data entry (post-match by operator)
 router.post('/:id/data', authenticate, requireTenantAdmin, matchController.enterMatchData);

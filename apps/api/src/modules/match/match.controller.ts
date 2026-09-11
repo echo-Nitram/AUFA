@@ -32,6 +32,18 @@ const matchDataSchema = z.object({
   incidents: z.string().optional(),
 });
 
+/**
+ * Matches are addressed by their own id, but a match belongs to a league through
+ * its tournament. Every read and write resolves it through this so one league can
+ * never reach another league's matches.
+ */
+async function findTenantMatchId(matchId: string, tenantId: string) {
+  return prisma.match.findFirst({
+    where: { id: matchId, tournament: { tenantId } },
+    select: { id: true },
+  });
+}
+
 export async function listMatches(req: AuthRequest, res: Response) {
   try {
     const { tournamentId } = req.params;
@@ -63,7 +75,7 @@ export async function listMatches(req: AuthRequest, res: Response) {
 export async function getMatch(req: AuthRequest, res: Response) {
   try {
     const match = await prisma.match.findFirst({
-      where: { id: req.params.id },
+      where: { id: req.params.id, tournament: { tenantId: req.tenantId! } },
       include: {
         homeTeam: { select: { id: true, name: true, logoUrl: true } },
         awayTeam: { select: { id: true, name: true, logoUrl: true } },
@@ -105,7 +117,7 @@ export async function enterMatchData(req: AuthRequest, res: Response) {
     const matchId = req.params.id;
 
     const match = await prisma.match.findFirst({
-      where: { id: matchId },
+      where: { id: matchId, tournament: { tenantId: req.tenantId! } },
       include: { tournament: true },
     });
 
@@ -359,7 +371,7 @@ export async function enterMatchData(req: AuthRequest, res: Response) {
 export async function getMatchRosters(req: AuthRequest, res: Response) {
   try {
     const match = await prisma.match.findFirst({
-      where: { id: req.params.id },
+      where: { id: req.params.id, tournament: { tenantId: req.tenantId! } },
       include: {
         homeTeam: { select: { id: true, name: true } },
         awayTeam: { select: { id: true, name: true } },
@@ -478,6 +490,10 @@ export async function assignReferee(req: AuthRequest, res: Response) {
   try {
     const { refereeId } = req.body;
 
+    if (!(await findTenantMatchId(req.params.id, req.tenantId!))) {
+      return res.status(404).json({ error: 'Partido no encontrado' });
+    }
+
     const match = await prisma.match.update({
       where: { id: req.params.id },
       data: { refereeId },
@@ -494,6 +510,21 @@ export async function assignReferee(req: AuthRequest, res: Response) {
 export async function assignVenue(req: AuthRequest, res: Response) {
   try {
     const { venueId } = req.body;
+
+    if (!(await findTenantMatchId(req.params.id, req.tenantId!))) {
+      return res.status(404).json({ error: 'Partido no encontrado' });
+    }
+
+    // A league may only schedule onto its own venues.
+    if (venueId) {
+      const venue = await prisma.venue.findFirst({
+        where: { id: venueId, tenantId: req.tenantId! },
+        select: { id: true },
+      });
+      if (!venue) {
+        return res.status(404).json({ error: 'Cancha no encontrada en esta liga' });
+      }
+    }
 
     const match = await prisma.match.update({
       where: { id: req.params.id },
@@ -516,6 +547,10 @@ export async function assignVenue(req: AuthRequest, res: Response) {
 export async function scheduleMatch(req: AuthRequest, res: Response) {
   try {
     const { scheduledAt } = req.body;
+
+    if (!(await findTenantMatchId(req.params.id, req.tenantId!))) {
+      return res.status(404).json({ error: 'Partido no encontrado' });
+    }
 
     const match = await prisma.match.update({
       where: { id: req.params.id },
@@ -546,8 +581,35 @@ export async function bulkScheduleMatchday(req: AuthRequest, res: Response) {
       return res.status(400).json({ error: 'Se requiere un array de schedules' });
     }
 
-    const results = await Promise.all(
-      schedules.map(s =>
+    const ownMatches = await prisma.match.findMany({
+      where: {
+        id: { in: schedules.map((s) => s.matchId) },
+        tournament: { tenantId: req.tenantId! },
+      },
+      select: { id: true },
+    });
+
+    if (ownMatches.length !== schedules.length) {
+      return res.status(404).json({ error: 'Hay partidos que no pertenecen a esta liga' });
+    }
+
+    const venueIds = schedules
+      .map((s) => s.venueId)
+      .filter((id): id is string => Boolean(id));
+
+    if (venueIds.length > 0) {
+      const ownVenues = await prisma.venue.findMany({
+        where: { id: { in: venueIds }, tenantId: req.tenantId! },
+        select: { id: true },
+      });
+      const ownVenueIds = new Set(ownVenues.map((v) => v.id));
+      if (venueIds.some((id) => !ownVenueIds.has(id))) {
+        return res.status(404).json({ error: 'Hay canchas que no pertenecen a esta liga' });
+      }
+    }
+
+    const results = await prisma.$transaction(
+      schedules.map((s) =>
         prisma.match.update({
           where: { id: s.matchId },
           data: {
@@ -568,6 +630,10 @@ export async function bulkScheduleMatchday(req: AuthRequest, res: Response) {
 export async function getMatchStats(req: AuthRequest, res: Response) {
   try {
     const matchId = req.params.id;
+
+    if (!(await findTenantMatchId(matchId, req.tenantId!))) {
+      return res.status(404).json({ error: 'Partido no encontrado' });
+    }
 
     const [goals, cards] = await Promise.all([
       prisma.goal.findMany({

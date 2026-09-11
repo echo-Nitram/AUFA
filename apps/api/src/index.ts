@@ -16,9 +16,16 @@ import tribunalRoutes from './modules/tribunal/tribunal.routes';
 import refereeRoutes from './modules/referee/referee.routes';
 import uploadRoutes from './modules/upload/upload.routes';
 import statsRoutes from './modules/stats/stats.routes';
+import fileRoutes from './modules/files/files.routes';
+import { globalLimiter } from './config/rate-limit';
+import { PUBLIC_CATEGORIES, uploadDir } from './config/upload';
 import path from 'path';
 
 const app = express();
+
+// Behind a proxy or load balancer the client IP arrives in X-Forwarded-For;
+// without this the rate limiters would bucket every request together.
+app.set('trust proxy', 1);
 
 // Global middleware
 app.use(helmet());
@@ -42,6 +49,8 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: '1.0.0', service: 'AUFA API' });
 });
 
+app.use(globalLimiter);
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tenants', tenantRoutes);
@@ -54,9 +63,14 @@ app.use('/api/tribunal', tribunalRoutes);
 app.use('/api/referees', refereeRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/files', fileRoutes);
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.resolve(env.upload.dir)));
+// Only public categories are served statically. Identity documents and medical
+// records live under the same upload directory but are reachable exclusively
+// through /api/files, which checks who is asking.
+for (const category of PUBLIC_CATEGORIES) {
+  app.use(`/uploads/${category}`, express.static(path.join(uploadDir, category)));
+}
 
 // 404 handler
 app.use((_req, res) => {

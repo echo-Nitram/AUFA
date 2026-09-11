@@ -194,7 +194,7 @@ export async function generateMatchdayOrders(req: AuthRequest, res: Response) {
 export async function checkAndApplyDefaults(req: AuthRequest, res: Response) {
   try {
     const match = await prisma.match.findFirst({
-      where: { id: req.params.matchId },
+      where: { id: req.params.matchId, tournament: { tenantId: req.tenantId! } },
       include: {
         paymentOrders: true,
         homeTeam: { select: { name: true } },

@@ -162,7 +162,20 @@ export async function hireReferee(req: AuthRequest, res: Response) {
       return res.status(404).json({ error: 'Árbitro no encontrado' });
     }
 
-    const updated = await Promise.all(
+    if (!Array.isArray(matchIds) || matchIds.length === 0) {
+      return res.status(400).json({ error: 'Se requiere al menos un partido' });
+    }
+
+    const ownMatches = await prisma.match.findMany({
+      where: { id: { in: matchIds }, tournament: { tenantId: req.tenantId! } },
+      select: { id: true },
+    });
+
+    if (ownMatches.length !== matchIds.length) {
+      return res.status(404).json({ error: 'Hay partidos que no pertenecen a esta liga' });
+    }
+
+    const updated = await prisma.$transaction(
       matchIds.map((matchId) =>
         prisma.match.update({
           where: { id: matchId },

@@ -25,8 +25,24 @@ model User {
   referee       Referee?
   // Tenant memberships (league admin, operator)
   tenantMembers TenantMember[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  // SHA-256 of the token handed to the user: a database dump must not be enough
+  // to take over accounts.
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 model Player {
@@ -286,11 +302,30 @@ model Team {
   // Financial
   paymentOrders   PaymentOrder[]
 
+  // Fichaje invitations
+  invites         TeamInvite[]
+
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
   @@unique([tenantId, name])
   @@map("teams")
+}
+
+model TeamInvite {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  teamId    String
+  team      Team      @relation(fields: [teamId], references: [id])
+  tenantId  String
+  createdBy String    // userId of the admin who issued it
+  expiresAt DateTime
+  usedAt    DateTime?
+  usedBy    String?   // playerId that redeemed it
+  createdAt DateTime  @default(now())
+
+  @@index([teamId])
+  @@map("team_invites")
 }
 
 model TeamPlayer {

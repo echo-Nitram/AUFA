@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import * as tribunalController from './tribunal.controller';
 import { authenticate } from '../../middleware/auth';
-import { resolveTenant, requireTenant, requireTenantAdmin } from '../../middleware/tenant';
+import { resolveTenant, requireTenant, requireTenantAdmin, requireTenantMember } from '../../middleware/tenant';
 
 const router = Router();
 
-router.use(authenticate, resolveTenant, requireTenant);
+// Sanctions are league-private justice records: membership is required throughout.
+router.use(authenticate, resolveTenant, requireTenant, requireTenantMember);
 
 // List sanctions for the league
 router.get('/sanctions', tribunalController.listSanctions);

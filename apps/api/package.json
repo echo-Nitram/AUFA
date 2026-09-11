@@ -16,6 +16,7 @@
   "dependencies": {
     "@aufa/shared": "*",
     "@prisma/client": "^5.8.0",
+    "aws4fetch": "^1.0.20",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

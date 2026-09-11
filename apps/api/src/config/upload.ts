@@ -1,28 +1,9 @@
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
 import crypto from 'crypto';
 import { env } from './env';
+import { PRIVATE_CATEGORIES, PUBLIC_CATEGORIES } from './storage';
 
-export const uploadDir = path.resolve(env.upload.dir);
-
-/**
- * Identity documents and medical records are personal data: they are written to
- * their own folders and are never served by the static handler. Only `logos` and
- * `general` are public.
- */
-export const PUBLIC_CATEGORIES = ['logos', 'general'] as const;
-export const PRIVATE_CATEGORIES = ['identity', 'medical'] as const;
-
-export type UploadCategory =
-  | (typeof PUBLIC_CATEGORIES)[number]
-  | (typeof PRIVATE_CATEGORIES)[number];
-
-const ALL_CATEGORIES: UploadCategory[] = [...PUBLIC_CATEGORIES, ...PRIVATE_CATEGORIES];
-
-for (const category of ALL_CATEGORIES) {
-  fs.mkdirSync(path.join(uploadDir, category), { recursive: true });
-}
+export { PUBLIC_CATEGORIES, PRIVATE_CATEGORIES };
 
 // The extension comes from the accepted mime type, never from the uploaded file
 // name: a client-supplied ".html" would otherwise be stored and later served as
@@ -42,20 +23,20 @@ function fileFilter(_req: unknown, file: Express.Multer.File, cb: multer.FileFil
   }
 }
 
-export function uploadTo(category: UploadCategory) {
-  return multer({
-    storage: multer.diskStorage({
-      destination(_req, _file, cb) {
-        cb(null, path.join(uploadDir, category));
-      },
-      filename(_req, file, cb) {
-        // Unguessable: private documents must not be reachable by enumeration.
-        cb(null, `${crypto.randomBytes(16).toString('hex')}${EXTENSION_BY_MIME[file.mimetype]}`);
-      },
-    }),
-    fileFilter,
-    limits: { fileSize: env.upload.maxFileSize },
-  });
+/**
+ * Files are held in memory and then handed to the storage driver, so the same
+ * code path works whether they end up on disk or in object storage. The size
+ * cap keeps that safe.
+ */
+export const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter,
+  limits: { fileSize: env.upload.maxFileSize },
+});
+
+/** Unguessable: private documents must not be reachable by enumeration. */
+export function generateFilename(mimetype: string): string {
+  return `${crypto.randomBytes(16).toString('hex')}${EXTENSION_BY_MIME[mimetype]}`;
 }
 
 /** URL for a publicly served file (logos, generic attachments). */

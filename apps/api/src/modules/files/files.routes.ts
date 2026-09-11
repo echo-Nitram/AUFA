@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
-import path from 'path';
 import { prisma } from '../../config/database';
 import { authenticate, AuthRequest } from '../../middleware/auth';
-import { PRIVATE_CATEGORIES, isSafeFilename, uploadDir } from '../../config/upload';
+import { isSafeFilename } from '../../config/upload';
+import { PRIVATE_CATEGORIES, StorageCategory, getObject } from '../../config/storage';
 
 const router = Router();
 
@@ -82,8 +82,14 @@ router.get('/:category/:filename', authenticate, async (req: AuthRequest, res: R
       return res.status(404).json({ error: 'Archivo no encontrado' });
     }
 
+    const object = await getObject(category as StorageCategory, filename);
+    if (!object) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+
     res.setHeader('Cache-Control', 'private, no-store');
-    res.sendFile(path.join(uploadDir, category, filename));
+    res.setHeader('Content-Type', object.contentType);
+    res.send(object.body);
   } catch (error) {
     console.error('GetPrivateFile error:', error);
     res.status(500).json({ error: 'Error interno del servidor' });

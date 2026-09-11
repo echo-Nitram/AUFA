@@ -27,7 +27,12 @@ const productionSecret = z
   .min(32, 'debe tener al menos 32 caracteres')
   .refine((v) => !INSECURE_SECRETS.has(v), 'no puede ser un valor de ejemplo');
 
-const secret = isProduction ? productionSecret : z.string().min(1).default('dev-secret');
+/**
+ * The two dev defaults must differ, or a checkout with no .env trips the
+ * "secrets must not match" check below and the API refuses to start.
+ */
+const secret = (devDefault: string) =>
+  isProduction ? productionSecret : z.string().min(1).default(devDefault);
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -39,8 +44,8 @@ const schema = z.object({
     ? z.string().min(1, 'es obligatoria en produccion')
     : z.string().min(1).default('postgresql://aufa:aufa_secret@localhost:5432/aufa?schema=public'),
 
-  JWT_SECRET: secret,
-  JWT_REFRESH_SECRET: secret,
+  JWT_SECRET: secret('dev-secret'),
+  JWT_REFRESH_SECRET: secret('dev-refresh-secret'),
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
@@ -55,10 +60,17 @@ const schema = z.object({
   UPLOAD_DIR: z.string().default('./uploads'),
   MAX_FILE_SIZE: z.coerce.number().int().positive().default(5_242_880),
 
+  // S3-compatible object storage (Cloudflare R2, S3, MinIO). With all four set,
+  // uploads go there instead of the local disk, which every affordable host
+  // wipes on deploy.
+  S3_ENDPOINT: z.string().optional(),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_REGION: z.string().default('auto'),
+
   SUPER_ADMIN_EMAIL: z.string().email().default('admin@aufa.uy'),
-  SUPER_ADMIN_PASSWORD: isProduction
-    ? productionSecret
-    : z.string().min(1).default('change-me'),
+  SUPER_ADMIN_PASSWORD: secret('change-me'),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -108,6 +120,14 @@ export const env = {
   upload: {
     dir: raw.UPLOAD_DIR,
     maxFileSize: raw.MAX_FILE_SIZE,
+  },
+
+  s3: {
+    endpoint: raw.S3_ENDPOINT,
+    bucket: raw.S3_BUCKET,
+    accessKeyId: raw.S3_ACCESS_KEY_ID,
+    secretAccessKey: raw.S3_SECRET_ACCESS_KEY,
+    region: raw.S3_REGION,
   },
 
   superAdmin: {

@@ -114,16 +114,41 @@ export async function getStandings(req: AuthRequest, res: Response) {
     const standings = await prisma.tournamentTeam.findMany({
       where: { tournamentId: tournament.id },
       include: { team: { select: { id: true, name: true, logoUrl: true } } },
-      orderBy: [
-        { points: 'desc' },
-        { goalsFor: 'desc' }, // Will be refined by tiebreaker config
-      ],
+      orderBy: [{ points: 'desc' }, { goalsFor: 'desc' }],
     });
 
-    // Apply tiebreaker sorting based on tournament config
+    // Head-to-head needs the results between the tied teams, so the played
+    // matches come along; the other criteria read the table alone.
+    const usesHeadToHead = tournament.tiebreakerOrder.includes('HEAD_TO_HEAD');
+
+    const playedMatches = usesHeadToHead
+      ? await prisma.match.findMany({
+          where: {
+            tournamentId: tournament.id,
+            status: 'COMPLETED',
+            homeScore: { not: null },
+            awayScore: { not: null },
+          },
+          select: { homeTeamId: true, awayTeamId: true, homeScore: true, awayScore: true },
+        })
+      : [];
+
     const sorted = applyTiebreakers<(typeof standings)[number]>(
       standings,
-      tournament.tiebreakerOrder
+      tournament.tiebreakerOrder,
+      usesHeadToHead
+        ? {
+            matches: playedMatches.map((m) => ({
+              homeTeamId: m.homeTeamId,
+              awayTeamId: m.awayTeamId,
+              homeScore: m.homeScore!,
+              awayScore: m.awayScore!,
+            })),
+            pointsForWin: tournament.pointsForWin,
+            pointsForDraw: tournament.pointsForDraw,
+            pointsForLoss: tournament.pointsForLoss,
+          }
+        : undefined
     );
 
     res.json(

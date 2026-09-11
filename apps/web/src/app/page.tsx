@@ -155,7 +155,14 @@ export default function HomePage() {
       <footer className="container mx-auto px-6 py-12 mt-20 border-t border-white/10">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-blue-300 text-sm">AUFA - Nube de Ligas de Uruguay</p>
-          <p className="text-blue-400 text-sm">Digitalizando el deporte amateur</p>
+          <nav className="flex gap-5 text-sm">
+            <Link href="/legal/terminos" className="text-blue-300 hover:text-white transition-colors">
+              Terminos
+            </Link>
+            <Link href="/legal/privacidad" className="text-blue-300 hover:text-white transition-colors">
+              Privacidad
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>

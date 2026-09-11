@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { upload, getFileUrl } from '../../config/upload';
-import { authenticate } from '../../middleware/auth';
-import { AuthRequest } from '../../middleware/auth';
+import { uploadTo, publicFileUrl, privateFileUrl } from '../../config/upload';
+import { authenticate, AuthRequest } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 
 const router = Router();
@@ -9,20 +8,21 @@ const router = Router();
 /**
  * Generic file upload - returns URL of uploaded file
  */
-router.post('/file', authenticate, upload.single('file'), (req: Request, res: Response) => {
+router.post('/file', authenticate, uploadTo('general').single('file'), (req: Request, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No se recibio ningun archivo' });
   }
-  res.json({ url: getFileUrl(req.file.filename), filename: req.file.filename });
+  res.json({ url: publicFileUrl('general', req.file.filename), filename: req.file.filename });
 });
 
 /**
- * Upload identity documents: CI front, CI back, selfie (3 files at once)
+ * Upload identity documents: CI front, CI back, selfie (3 files at once).
+ * Stored privately and reachable only through /api/files.
  */
 router.post(
   '/identity',
   authenticate,
-  upload.fields([
+  uploadTo('identity').fields([
     { name: 'ciFront', maxCount: 1 },
     { name: 'ciBack', maxCount: 1 },
     { name: 'selfie', maxCount: 1 },
@@ -31,16 +31,16 @@ router.post(
     try {
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
-      if (!files.ciFront?.[0] || !files.ciBack?.[0] || !files.selfie?.[0]) {
+      if (!files?.ciFront?.[0] || !files?.ciBack?.[0] || !files?.selfie?.[0]) {
         return res.status(400).json({ error: 'Se requieren los 3 archivos: ciFront, ciBack, selfie' });
       }
 
       const player = await prisma.player.update({
         where: { userId: req.user!.userId },
         data: {
-          ciPhotoFrontUrl: getFileUrl(files.ciFront[0].filename),
-          ciPhotoBackUrl: getFileUrl(files.ciBack[0].filename),
-          selfieUrl: getFileUrl(files.selfie[0].filename),
+          ciPhotoFrontUrl: privateFileUrl('identity', files.ciFront[0].filename),
+          ciPhotoBackUrl: privateFileUrl('identity', files.ciBack[0].filename),
+          selfieUrl: privateFileUrl('identity', files.selfie[0].filename),
           identityStatus: 'PENDING',
         },
       });
@@ -59,12 +59,12 @@ router.post(
 );
 
 /**
- * Upload medical clearance document
+ * Upload medical clearance document. Stored privately.
  */
 router.post(
   '/medical',
   authenticate,
-  upload.single('document'),
+  uploadTo('medical').single('document'),
   async (req: AuthRequest, res: Response) => {
     try {
       if (!req.file) {
@@ -90,7 +90,7 @@ router.post(
       const clearance = await prisma.medicalClearance.create({
         data: {
           playerId: player.id,
-          documentUrl: getFileUrl(req.file.filename),
+          documentUrl: privateFileUrl('medical', req.file.filename),
           issuedAt: new Date(issuedAt),
           expiresAt: new Date(expiresAt),
           isActive: true,
@@ -106,18 +106,13 @@ router.post(
 );
 
 /**
- * Upload team/league logo
+ * Upload team/league logo. Public by design - it is rendered on the portal.
  */
-router.post(
-  '/logo',
-  authenticate,
-  upload.single('logo'),
-  (req: Request, res: Response) => {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No se recibio el logo' });
-    }
-    res.json({ url: getFileUrl(req.file.filename) });
+router.post('/logo', authenticate, uploadTo('logos').single('logo'), (req: Request, res: Response) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No se recibio el logo' });
   }
-);
+  res.json({ url: publicFileUrl('logos', req.file.filename) });
+});
 
 export default router;

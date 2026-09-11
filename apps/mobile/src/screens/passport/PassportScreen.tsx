@@ -30,15 +30,15 @@ interface PassportData {
 }
 
 export default function PassportScreen() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [passport, setPassport] = useState<PassportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchPassport = async () => {
-    if (!user?.playerId) { setLoading(false); return; }
+    if (!user?.playerId || !token) { setLoading(false); return; }
     try {
-      const data = await aufaIdApi.getPassport(user.playerId);
+      const data = await aufaIdApi.getPassport(user.playerId, token);
       setPassport(data);
     } catch {
       setPassport(null);

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
@@ -22,10 +23,10 @@ const loginSchema = z.object({
 
 function generateTokens(payload: { userId: string; email: string; role: string }) {
   const accessToken = jwt.sign(payload, env.jwt.secret, {
-    expiresIn: env.jwt.expiresIn as string,
+    expiresIn: env.jwt.expiresIn,
   });
   const refreshToken = jwt.sign(payload, env.jwt.refreshSecret, {
-    expiresIn: env.jwt.refreshExpiresIn as string,
+    expiresIn: env.jwt.refreshExpiresIn,
   });
   return { accessToken, refreshToken };
 }
@@ -58,12 +59,12 @@ export async function lookupCI(req: Request, res: Response) {
     const [local, domain] = email.split('@');
     const maskedEmail = local[0] + '***' + local[local.length - 1] + '@' + domain;
 
+    // Enough to confirm "this is me" on the login screen, and no more: the
+    // endpoint is unauthenticated, so every extra field is harvestable by CI.
     res.json({
       exists: true,
       fullName: player.fullName,
-      photoUrl: player.photoUrl,
       maskedEmail,
-      hasMedicalClearance: player.medicalClearances.length > 0,
     });
   } catch (error) {
     console.error('LookupCI error:', error);
@@ -272,10 +273,7 @@ export async function getMe(req: AuthRequest, res: Response) {
   }
 }
 
-/**
- * Request password reset - generates a token (stored in-memory for simplicity)
- */
-const resetTokens = new Map<string, { userId: string; expiresAt: Date }>();
+const hashResetToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
 
 export async function forgotPassword(req: Request, res: Response) {
   try {
@@ -289,19 +287,30 @@ export async function forgotPassword(req: Request, res: Response) {
       return res.json({ message: 'Si el email existe, recibiras instrucciones para resetear tu contrasena.' });
     }
 
-    // Generate reset token
-    const crypto = require('crypto');
-    const token = crypto.randomBytes(32).toString('hex');
-    resetTokens.set(token, { userId: user.id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) }); // 1 hour
+    // Any pending request is superseded by this one.
+    await prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
 
-    // In production, send email. For now, log it.
-    console.log(`[PASSWORD RESET] Token for ${email}: ${token}`);
-    console.log(`[PASSWORD RESET] URL: ${process.env.WEB_URL || 'http://localhost:3000'}/reset-password?token=${token}`);
+    const token = crypto.randomBytes(32).toString('hex');
+    await prisma.passwordResetToken.create({
+      data: {
+        tokenHash: hashResetToken(token),
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+      },
+    });
+
+    // TODO(fase 2): send this by email instead of logging it.
+    if (!env.isProduction) {
+      console.log(`[PASSWORD RESET] ${env.webUrl}/reset-password?token=${token}`);
+    }
 
     res.json({
       message: 'Si el email existe, recibiras instrucciones para resetear tu contrasena.',
-      // DEV ONLY: include token so it can be used without email
-      ...(env.nodeEnv !== 'production' && { devToken: token }),
+      // DEV ONLY: lets the flow be exercised before email delivery exists.
+      ...(!env.isProduction && { devToken: token }),
     });
   } catch (error) {
     console.error('ForgotPassword error:', error);
@@ -313,23 +322,41 @@ export async function resetPassword(req: Request, res: Response) {
   try {
     const { token, password } = req.body;
     if (!token || !password) return res.status(400).json({ error: 'Token y contrasena requeridos' });
-    if (password.length < 6) return res.status(400).json({ error: 'La contrasena debe tener al menos 6 caracteres' });
+    // Matches the minimum enforced at registration. Raising both is SEC-06.
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'La contrasena debe tener al menos 6 caracteres' });
+    }
 
-    const resetData = resetTokens.get(token);
-    if (!resetData || resetData.expiresAt < new Date()) {
+    const record = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash: hashResetToken(token) },
+    });
+
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
       return res.status(400).json({ error: 'Token invalido o expirado' });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    await prisma.user.update({
-      where: { id: resetData.userId },
-      data: { passwordHash },
-    });
 
-    resetTokens.delete(token);
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: record.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        throw new Error('TOKEN_ALREADY_USED');
+      }
+
+      await tx.user.update({
+        where: { id: record.userId },
+        data: { passwordHash },
+      });
+    });
 
     res.json({ message: 'Contrasena actualizada exitosamente' });
   } catch (error) {
+    if (error instanceof Error && error.message === 'TOKEN_ALREADY_USED') {
+      return res.status(400).json({ error: 'Token invalido o expirado' });
+    }
     console.error('ResetPassword error:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }

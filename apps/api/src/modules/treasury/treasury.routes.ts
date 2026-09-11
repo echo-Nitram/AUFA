@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import * as treasuryController from './treasury.controller';
 import { authenticate, requireSuperAdmin } from '../../middleware/auth';
-import { resolveTenant, requireTenant, requireTenantAdmin } from '../../middleware/tenant';
+import { resolveTenant, requireTenant, requireTenantAdmin, requireTenantMember } from '../../middleware/tenant';
 
 const router = Router();
 
-// Tenant-scoped routes
-router.get('/orders', authenticate, resolveTenant, requireTenant, treasuryController.listPaymentOrders);
+// Financial data is league-private: every route below verifies league membership.
+router.get('/orders', authenticate, resolveTenant, requireTenant, requireTenantMember, treasuryController.listPaymentOrders);
 router.post('/orders', authenticate, resolveTenant, requireTenant, requireTenantAdmin, treasuryController.createPaymentOrder);
-router.post('/orders/:id/pay', authenticate, resolveTenant, requireTenant, treasuryController.processPayment);
+router.post('/orders/:id/pay', authenticate, resolveTenant, requireTenant, requireTenantMember, treasuryController.processPayment);
 router.post('/orders/generate-matchday', authenticate, resolveTenant, requireTenant, requireTenantAdmin, treasuryController.generateMatchdayOrders);
 
 // Financial summary

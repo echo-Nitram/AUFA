@@ -47,7 +47,7 @@ export default function TeamsPage() {
     if (!tenantId || !token || !playerCI) return;
     try {
       // First lookup CI to get playerId
-      const lookup = await aufaIdApi.lookup(playerCI);
+      const lookup = await aufaIdApi.lookup(playerCI, token, tenantId);
       if (!lookup.exists) { setMsg('Jugador no registrado en AUFA'); return; }
       await leagueApi.addPlayerToTeam(tenantId, token, teamId, { playerId: lookup.player.id });
       setPlayerCI('');

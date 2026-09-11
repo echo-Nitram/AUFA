@@ -1,16 +1,16 @@
 import { Router } from 'express';
 import * as tenantController from './tenant.controller';
 import { authenticate, requireSuperAdmin } from '../../middleware/auth';
-import { resolveTenant, requireTenant, requireTenantAdmin } from '../../middleware/tenant';
+import { resolveTenant, requireTenant, requireTenantAdmin, tenantFromParam } from '../../middleware/tenant';
 
 const router = Router();
 
 // Super-Admin: manage tenants
 router.post('/', authenticate, requireSuperAdmin, tenantController.createTenant);
 router.get('/', authenticate, requireSuperAdmin, tenantController.listTenants);
-router.get('/:id', authenticate, tenantController.getTenant);
+router.get('/:id', authenticate, tenantFromParam(), requireTenantAdmin, tenantController.getTenant);
 router.put('/:id', authenticate, requireSuperAdmin, tenantController.updateTenant);
-router.put('/:id/branding', authenticate, tenantController.updateBranding);
+router.put('/:id/branding', authenticate, tenantFromParam(), requireTenantAdmin, tenantController.updateBranding);
 
 // Self-service: create league (no auth required - creates account + tenant)
 router.post('/create', tenantController.createTenantSelfService);

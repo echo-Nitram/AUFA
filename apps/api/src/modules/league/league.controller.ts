@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/database';
 import { AuthRequest } from '../../middleware/auth';
+import { env } from '../../config/env';
 import crypto from 'crypto';
 
 const createTournamentSchema = z.object({
@@ -243,6 +244,14 @@ export async function addPlayerToTeam(req: AuthRequest, res: Response) {
     const { playerId, shirtNumber } = req.body;
     const { teamId } = req.params;
 
+    const team = await prisma.team.findFirst({
+      where: { id: teamId, tenantId: req.tenantId! },
+      select: { id: true },
+    });
+    if (!team) {
+      return res.status(404).json({ error: 'Equipo no encontrado en esta liga' });
+    }
+
     // Validate: player exists
     const player = await prisma.player.findUnique({ where: { id: playerId } });
     if (!player) {
@@ -291,14 +300,19 @@ export async function addPlayerToTeam(req: AuthRequest, res: Response) {
 
 export async function removePlayerFromTeam(req: AuthRequest, res: Response) {
   try {
-    await prisma.teamPlayer.updateMany({
+    const { count } = await prisma.teamPlayer.updateMany({
       where: {
         teamId: req.params.teamId,
         playerId: req.params.playerId,
         isActive: true,
+        team: { tenantId: req.tenantId! },
       },
       data: { isActive: false, leftAt: new Date() },
     });
+
+    if (count === 0) {
+      return res.status(404).json({ error: 'Fichaje no encontrado en esta liga' });
+    }
 
     res.json({ message: 'Jugador dado de baja del equipo' });
   } catch (error) {
@@ -307,19 +321,29 @@ export async function removePlayerFromTeam(req: AuthRequest, res: Response) {
   }
 }
 
-// Simple invite code system (stored in memory for simplicity; production would use DB/Redis)
-const inviteCodes = new Map<string, { teamId: string; tenantId: string; expiresAt: Date }>();
-
 export async function generateInviteLink(req: AuthRequest, res: Response) {
   try {
-    const code = crypto.randomBytes(6).toString('hex');
-    inviteCodes.set(code, {
-      teamId: req.params.teamId,
-      tenantId: req.tenantId!,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    const team = await prisma.team.findFirst({
+      where: { id: req.params.teamId, tenantId: req.tenantId! },
+      select: { id: true },
+    });
+    if (!team) {
+      return res.status(404).json({ error: 'Equipo no encontrado en esta liga' });
+    }
+
+    const code = crypto.randomBytes(16).toString('hex');
+
+    await prisma.teamInvite.create({
+      data: {
+        code,
+        teamId: team.id,
+        tenantId: req.tenantId!,
+        createdBy: req.user!.userId,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
     });
 
-    res.json({ inviteCode: code, inviteUrl: `${process.env.WEB_URL}/join/${code}` });
+    res.json({ inviteCode: code, inviteUrl: `${env.webUrl}/join/${code}` });
   } catch (error) {
     console.error('GenerateInviteLink error:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
@@ -328,8 +352,10 @@ export async function generateInviteLink(req: AuthRequest, res: Response) {
 
 export async function joinTeamByInvite(req: AuthRequest, res: Response) {
   try {
-    const invite = inviteCodes.get(req.params.inviteCode);
-    if (!invite || invite.expiresAt < new Date()) {
+    const invite = await prisma.teamInvite.findUnique({
+      where: { code: req.params.inviteCode },
+    });
+    if (!invite || invite.usedAt || invite.expiresAt < new Date()) {
       return res.status(404).json({ error: 'Invitación inválida o expirada' });
     }
 
@@ -353,13 +379,27 @@ export async function joinTeamByInvite(req: AuthRequest, res: Response) {
       return res.status(409).json({ error: 'Ya está fichado en un equipo de esta liga' });
     }
 
-    const teamPlayer = await prisma.teamPlayer.create({
-      data: { teamId: invite.teamId, playerId: player.id },
+    const teamPlayer = await prisma.$transaction(async (tx) => {
+      // Claim the invite in the same transaction as the fichaje so a code cannot
+      // be redeemed twice by concurrent requests.
+      const claimed = await tx.teamInvite.updateMany({
+        where: { id: invite.id, usedAt: null },
+        data: { usedAt: new Date(), usedBy: player.id },
+      });
+      if (claimed.count === 0) {
+        throw new Error('INVITE_ALREADY_USED');
+      }
+
+      return tx.teamPlayer.create({
+        data: { teamId: invite.teamId, playerId: player.id },
+      });
     });
 
-    inviteCodes.delete(req.params.inviteCode);
     res.status(201).json({ message: 'Te uniste al equipo exitosamente', teamPlayer });
   } catch (error) {
+    if (error instanceof Error && error.message === 'INVITE_ALREADY_USED') {
+      return res.status(409).json({ error: 'Esta invitación ya fue utilizada' });
+    }
     console.error('JoinTeamByInvite error:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }

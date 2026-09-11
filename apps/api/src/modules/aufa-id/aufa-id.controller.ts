@@ -2,6 +2,39 @@ import { Request, Response } from 'express';
 import { prisma } from '../../config/database';
 import { AuthRequest } from '../../middleware/auth';
 
+/** True when the player is registered in a team of the given league. */
+async function isPlayerInTenant(playerId: string, tenantId: string) {
+  const membership = await prisma.teamPlayer.findFirst({
+    where: { playerId, isActive: true, team: { tenantId } },
+    select: { id: true },
+  });
+  return Boolean(membership);
+}
+
+/** True when the requester is the player, a super-admin, or an admin of a league the player plays in. */
+async function mayReadPlayerRecord(req: AuthRequest, playerId: string) {
+  if (req.user!.role === 'SUPER_ADMIN') return true;
+
+  const self = await prisma.player.findFirst({
+    where: { id: playerId, userId: req.user!.userId },
+    select: { id: true },
+  });
+  if (self) return true;
+
+  const admin = await prisma.tenantMember.findFirst({
+    where: {
+      userId: req.user!.userId,
+      role: 'ADMIN',
+      isActive: true,
+      tenant: {
+        teams: { some: { teamPlayers: { some: { playerId, isActive: true } } } },
+      },
+    },
+    select: { id: true },
+  });
+  return Boolean(admin);
+}
+
 /**
  * Lookup player by CI - used during registration/fichaje flow.
  * If player exists, returns basic info. If not, returns 404.
@@ -177,6 +210,12 @@ export async function validateIdentity(req: AuthRequest, res: Response) {
       return res.status(400).json({ error: 'Estado debe ser APPROVED o REJECTED' });
     }
 
+    // AUFA ID is national, so an approval here is trusted by every other league.
+    // Only an organizer the player actually plays for may grant it.
+    if (!(await isPlayerInTenant(req.params.playerId, req.tenantId!))) {
+      return res.status(403).json({ error: 'El jugador no esta fichado en esta liga' });
+    }
+
     const player = await prisma.player.update({
       where: { id: req.params.playerId },
       data: {
@@ -198,6 +237,10 @@ export async function validateIdentity(req: AuthRequest, res: Response) {
  */
 export async function getMedicalStatus(req: AuthRequest, res: Response) {
   try {
+    if (!(await mayReadPlayerRecord(req, req.params.playerId))) {
+      return res.status(403).json({ error: 'No puede consultar la ficha medica de este jugador' });
+    }
+
     const clearance = await prisma.medicalClearance.findFirst({
       where: { playerId: req.params.playerId, isActive: true },
       orderBy: { expiresAt: 'desc' },

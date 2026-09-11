@@ -93,7 +93,29 @@ export async function getTenant(req: Request, res: Response) {
   try {
     const tenant = await prisma.tenant.findUnique({
       where: { id: req.params.id },
-      include: {
+      // Payment credentials (mercadoPagoToken, stripeAccountId, bankAccount) are
+      // deliberately excluded: nothing needs to read them back over the API.
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        subdomain: true,
+        customDomain: true,
+        plan: true,
+        isActive: true,
+        logoUrl: true,
+        bannerUrl: true,
+        primaryColor: true,
+        secondaryColor: true,
+        accentColor: true,
+        backgroundColor: true,
+        textColor: true,
+        commissionRate: true,
+        matchFee: true,
+        refereeFee: true,
+        monthlyFee: true,
+        currency: true,
+        createdAt: true,
         members: { include: { user: { select: { id: true, email: true } } } },
         _count: { select: { tournaments: true, teams: true } },
       },

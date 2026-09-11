@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../../config/database';
 import { AuthRequest } from '../../middleware/auth';
 import { env } from '../../config/env';
+import { applyTiebreakers, goalDifference, fairPlayScore } from './standings';
 import crypto from 'crypto';
 
 const createTournamentSchema = z.object({
@@ -120,7 +121,10 @@ export async function getStandings(req: AuthRequest, res: Response) {
     });
 
     // Apply tiebreaker sorting based on tournament config
-    const sorted = applyTiebreakers(standings, tournament.tiebreakerOrder);
+    const sorted = applyTiebreakers<(typeof standings)[number]>(
+      standings,
+      tournament.tiebreakerOrder
+    );
 
     res.json(
       sorted.map((s, i) => ({
@@ -134,9 +138,9 @@ export async function getStandings(req: AuthRequest, res: Response) {
         lost: s.lost,
         goalsFor: s.goalsFor,
         goalsAgainst: s.goalsAgainst,
-        goalDifference: s.goalsFor - s.goalsAgainst,
+        goalDifference: goalDifference(s),
         points: s.points,
-        fairPlayScore: s.fairPlayCount > 0 ? s.fairPlaySum / s.fairPlayCount : 0,
+        fairPlayScore: fairPlayScore(s),
       }))
     );
   } catch (error) {
@@ -145,35 +149,6 @@ export async function getStandings(req: AuthRequest, res: Response) {
   }
 }
 
-function applyTiebreakers(standings: any[], order: string[]) {
-  return [...standings].sort((a, b) => {
-    // Primary: points
-    if (a.points !== b.points) return b.points - a.points;
-
-    // Apply configured tiebreakers
-    for (const criteria of order) {
-      switch (criteria) {
-        case 'GOAL_DIFFERENCE': {
-          const diffA = a.goalsFor - a.goalsAgainst;
-          const diffB = b.goalsFor - b.goalsAgainst;
-          if (diffA !== diffB) return diffB - diffA;
-          break;
-        }
-        case 'GOALS_FOR':
-          if (a.goalsFor !== b.goalsFor) return b.goalsFor - a.goalsFor;
-          break;
-        case 'FAIR_PLAY': {
-          const fpA = a.fairPlayCount > 0 ? a.fairPlaySum / a.fairPlayCount : 0;
-          const fpB = b.fairPlayCount > 0 ? b.fairPlaySum / b.fairPlayCount : 0;
-          if (fpA !== fpB) return fpB - fpA;
-          break;
-        }
-        // HEAD_TO_HEAD requires match data lookup - would need additional query
-      }
-    }
-    return 0;
-  });
-}
 
 export async function createTeam(req: AuthRequest, res: Response) {
   try {

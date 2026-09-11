@@ -13,7 +13,11 @@ services:
     plan: free
     rootDir: .
 
-    buildCommand: npm ci && npm run db:generate && npm run build:api
+    # --include=dev es obligatorio: NODE_ENV=production hace que npm omita las
+    # devDependencies, y ahi viven los @types que necesita tsc para compilar.
+    # Curiosamente typescript y el CLI de prisma si quedan instalados, asi que el
+    # build avanza hasta tsc y recien ahi falla, lo que despista bastante.
+    buildCommand: npm ci --include=dev && npm run db:generate && npm run build:api
 
     # migrate deploy aplica las migraciones pendientes en cada arranque, para que
     # el esquema nunca quede atras del codigo desplegado.

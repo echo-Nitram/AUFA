@@ -17,10 +17,9 @@ import refereeRoutes from './modules/referee/referee.routes';
 import uploadRoutes from './modules/upload/upload.routes';
 import statsRoutes from './modules/stats/stats.routes';
 import fileRoutes from './modules/files/files.routes';
+import publicFileRoutes from './modules/files/public.routes';
 import jobRoutes from './modules/notifications/jobs.routes';
 import { globalLimiter } from './config/rate-limit';
-import { PUBLIC_CATEGORIES, uploadDir } from './config/upload';
-import path from 'path';
 
 const app = express();
 
@@ -67,12 +66,9 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/jobs', jobRoutes);
 
-// Only public categories are served statically. Identity documents and medical
-// records live under the same upload directory but are reachable exclusively
-// through /api/files, which checks who is asking.
-for (const category of PUBLIC_CATEGORIES) {
-  app.use(`/uploads/${category}`, express.static(path.join(uploadDir, category)));
-}
+// Logos and generic attachments. Identity documents and medical records are
+// reachable exclusively through /api/files, which checks who is asking.
+app.use('/uploads', publicFileRoutes);
 
 // 404 handler
 app.use((_req, res) => {

@@ -46,6 +46,12 @@ const schema = z.object({
 
   AUFA_COMMISSION_RATE: z.coerce.number().min(0).max(1).default(0.04),
 
+  // Without a key, notifications are logged instead of sent.
+  RESEND_API_KEY: z.string().optional(),
+  MAIL_FROM: z.string().default('AUFA <no-reply@aufa.uy>'),
+  // Shared secret the scheduled-job endpoints require.
+  CRON_SECRET: z.string().optional(),
+
   UPLOAD_DIR: z.string().default('./uploads'),
   MAX_FILE_SIZE: z.coerce.number().int().positive().default(5_242_880),
 
@@ -91,6 +97,13 @@ export const env = {
   },
 
   aufaCommissionRate: raw.AUFA_COMMISSION_RATE,
+
+  mail: {
+    resendApiKey: raw.RESEND_API_KEY,
+    from: raw.MAIL_FROM,
+  },
+
+  cronSecret: raw.CRON_SECRET,
 
   upload: {
     dir: raw.UPLOAD_DIR,

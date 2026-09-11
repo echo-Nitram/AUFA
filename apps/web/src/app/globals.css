@@ -94,4 +94,36 @@
   .standings-table tr:hover td {
     @apply bg-gray-50;
   }
+
+  .legal-prose h1 {
+    @apply text-3xl font-bold text-gray-900 mb-4;
+  }
+
+  .legal-prose h2 {
+    @apply text-lg font-bold text-gray-900 mt-10 mb-3;
+  }
+
+  .legal-prose p {
+    @apply text-gray-700 leading-relaxed mb-4;
+  }
+
+  .legal-prose .lead {
+    @apply text-lg text-gray-600 mb-8;
+  }
+
+  .legal-prose a {
+    @apply text-primary underline;
+  }
+
+  .legal-prose table {
+    @apply w-full text-sm my-6 border border-gray-200 rounded-lg overflow-hidden;
+  }
+
+  .legal-prose th {
+    @apply bg-gray-50 px-4 py-3 text-left font-semibold text-gray-600 text-xs uppercase tracking-wider;
+  }
+
+  .legal-prose td {
+    @apply px-4 py-3 border-t border-gray-100 text-gray-700 align-top;
+  }
 }

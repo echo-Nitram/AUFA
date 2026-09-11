@@ -17,6 +17,7 @@ import refereeRoutes from './modules/referee/referee.routes';
 import uploadRoutes from './modules/upload/upload.routes';
 import statsRoutes from './modules/stats/stats.routes';
 import fileRoutes from './modules/files/files.routes';
+import jobRoutes from './modules/notifications/jobs.routes';
 import { globalLimiter } from './config/rate-limit';
 import { PUBLIC_CATEGORIES, uploadDir } from './config/upload';
 import path from 'path';
@@ -64,6 +65,7 @@ app.use('/api/referees', refereeRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/jobs', jobRoutes);
 
 // Only public categories are served statically. Identity documents and medical
 // records live under the same upload directory but are reachable exclusively

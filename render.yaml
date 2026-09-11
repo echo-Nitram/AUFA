@@ -1,0 +1,63 @@
+# Render Blueprint para la API de AUFA.
+#
+# Render -> New -> Blueprint -> elegir este repositorio.
+# Los valores marcados sync:false se piden al crear el servicio.
+#
+# Nota sobre el monorepo: rootDir es la raiz, no apps/api. El lockfile vive
+# solamente en la raiz, asi que un npm ci desde apps/api falla.
+
+services:
+  - type: web
+    name: aufa-api
+    runtime: node
+    plan: free
+    rootDir: .
+
+    buildCommand: npm ci && npm run db:generate && npm run build:api
+
+    # migrate deploy aplica las migraciones pendientes en cada arranque, para que
+    # el esquema nunca quede atras del codigo desplegado.
+    startCommand: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && npm run start -w apps/api
+
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Cadena "pooled" de Neon. La directa agota conexiones.
+      - key: DATABASE_URL
+        sync: false
+
+      # La API no arranca si estos son cortos, de ejemplo, o iguales entre si.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: SUPER_ADMIN_PASSWORD
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+
+      # Dominio de Vercel. Si no coincide exactamente, CORS bloquea todo.
+      - key: WEB_URL
+        sync: false
+
+      # Almacenamiento de objetos. Sin esto, los documentos de identidad se
+      # pierden en cada deploy: el disco de Render no es persistente.
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_REGION
+        value: auto
+
+      # Opcional: sin la clave, los correos se registran en consola.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false

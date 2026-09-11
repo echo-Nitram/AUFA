@@ -20,7 +20,4 @@ router.post('/sanctions/:id/resolve', requireTenantAdmin, tribunalController.res
 // Check if a player is eligible to play
 router.get('/eligibility/:playerId', tribunalController.checkEligibility);
 
-// Serve a match for a sanction (after a matchday is completed)
-router.post('/sanctions/serve-matchday', requireTenantAdmin, tribunalController.serveMatchday);
-
 export default router;

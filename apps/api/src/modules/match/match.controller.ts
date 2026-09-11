@@ -309,7 +309,38 @@ export async function enterMatchData(req: AuthRequest, res: Response) {
         },
       });
 
-      // 7. Process sanctions automatically
+      // 7. Serve one date of every suspension in force for the two teams that
+      // just played. A suspension is served by the team playing, not by the
+      // league advancing: a player whose team had a bye does not serve.
+      // This runs before the cards below, so a sanction created by this match
+      // is not counted as already served by it.
+      const rosters = await tx.teamPlayer.findMany({
+        where: { isActive: true, teamId: { in: [match.homeTeamId, match.awayTeamId] } },
+        select: { playerId: true },
+      });
+
+      if (rosters.length > 0) {
+        const inForce = await tx.sanction.findMany({
+          where: {
+            tenantId: match.tournament.tenantId,
+            playerId: { in: rosters.map((r) => r.playerId) },
+            isActive: true,
+            // A case still before the tribunal has no sentence to serve yet.
+            status: { not: 'PENDING_TRIBUNAL' },
+          },
+        });
+
+        for (const sanction of inForce) {
+          if (sanction.matchesServed >= sanction.matchesSuspended) continue;
+          const matchesServed = sanction.matchesServed + 1;
+          await tx.sanction.update({
+            where: { id: sanction.id },
+            data: { matchesServed, isActive: matchesServed < sanction.matchesSuspended },
+          });
+        }
+      }
+
+      // 8. Process sanctions automatically
       // Group cards by player to detect double yellows
       const playerCards = new Map<string, { yellows: number; reds: number }>();
       for (const card of data.cards) {

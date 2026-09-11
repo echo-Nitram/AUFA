@@ -100,7 +100,18 @@ export default function TournamentsPage() {
     if (!tenantId || !token) return;
     try {
       const result = await fixtureApi.generate(tenantId, token, tournamentId);
-      showMsg(`Fixture generado: ${result.totalMatches} partidos en ${result.totalMatchdays} fechas`, 'success');
+      const pending = result.unscheduled?.length ?? 0;
+      if (pending > 0) {
+        const detail = result.unscheduled
+          .map((u: any) => `Fecha ${u.matchday}: ${u.homeTeam} vs ${u.awayTeam} (${u.reason})`)
+          .join(' · ');
+        showMsg(
+          `Fixture generado con ${result.totalMatches} partidos, pero ${pending} no se pudieron programar. ${detail}`,
+          'error'
+        );
+      } else {
+        showMsg(`Fixture generado: ${result.totalMatches} partidos en ${result.totalMatchdays} fechas`, 'success');
+      }
       loadTournaments();
       setExpandedTournament(null);
     } catch (err: any) { showMsg(err.message, 'error'); }

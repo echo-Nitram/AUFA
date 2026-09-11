@@ -1,8 +1,11 @@
 name: CI
 
 on:
+  # Work on a branch is checked through its pull request. Restricting push to the
+  # integration branch avoids running the whole workflow twice for every commit
+  # on a branch that already has one open. Update this if the branch is renamed.
   push:
-    branches: ['**']
+    branches: ['claude/aufa-platform-architecture-u0kNJ']
   pull_request:
 
 # A newer push on the same branch makes the previous run irrelevant.

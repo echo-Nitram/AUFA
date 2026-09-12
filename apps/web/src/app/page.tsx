@@ -6,34 +6,35 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900">
       {/* Header */}
-      <header className="container mx-auto px-6 py-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center font-bold text-white text-xl">
+      <header className="container mx-auto px-4 sm:px-6 py-6 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-accent rounded-lg flex items-center justify-center font-bold text-white text-lg sm:text-xl">
             A
           </div>
-          <span className="text-white text-2xl font-bold">AUFA</span>
+          <span className="text-white text-xl sm:text-2xl font-bold">AUFA</span>
         </div>
-        <nav className="flex items-center gap-4">
-          <Link href="/liga/liga-demo" className="text-white/80 hover:text-white transition-colors">
+        <nav className="flex items-center gap-3 sm:gap-4">
+          {/* En celular no entran los tres: el demo se ofrece abajo, en el hero. */}
+          <Link href="/liga/liga-demo" className="hidden sm:inline text-white/80 hover:text-white transition-colors">
             Ver Liga Demo
           </Link>
-          <Link href="/login" className="text-white/80 hover:text-white transition-colors">
+          <Link href="/login" className="text-white/80 hover:text-white transition-colors text-sm sm:text-base whitespace-nowrap">
             Iniciar Sesion
           </Link>
-          <Link href="/register" className="btn-accent">
+          <Link href="/register" className="btn-accent px-4 py-2 text-sm sm:px-6 sm:py-2.5 sm:text-base whitespace-nowrap">
             Registrarse
           </Link>
         </nav>
       </header>
 
       {/* Hero */}
-      <main className="container mx-auto px-6 py-20">
+      <main className="container mx-auto px-4 sm:px-6 py-16 sm:py-20">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
             La Nube de Ligas<br />
             <span className="text-accent">de Uruguay</span>
           </h1>
-          <p className="text-xl text-blue-200 mb-12 max-w-2xl mx-auto">
+          <p className="text-lg sm:text-xl text-blue-200 mb-12 max-w-2xl mx-auto">
             Plataforma integral para organizar, gestionar y digitalizar ligas deportivas.
             Futbol 5, 7 y 11. Todo en un solo lugar.
           </p>
@@ -45,6 +46,9 @@ export default function HomePage() {
               Ya tengo cuenta
             </Link>
           </div>
+          <Link href="/liga/liga-demo" className="sm:hidden inline-block mt-6 text-blue-200 underline underline-offset-4">
+            Ver Liga Demo
+          </Link>
         </div>
 
         {/* Features Grid */}

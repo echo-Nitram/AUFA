@@ -9,6 +9,9 @@ build/
 .next/
 out/
 
+# Lo regenera Next en cada build y trae aviso de no editarlo
+next-env.d.ts
+
 # Environment
 .env
 .env.local

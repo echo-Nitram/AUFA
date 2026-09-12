@@ -94,14 +94,14 @@ export default function PublicLeagueLayout({ children }: { children: React.React
 
           {/* Navigation tabs */}
           <div className="container mx-auto px-4">
-            <nav className="flex gap-1 -mb-px">
+            <nav className="flex gap-1 -mb-px overflow-x-auto">
               {tabs.map(tab => {
                 const isActive = pathname === tab.href;
                 return (
                   <Link
                     key={tab.href}
                     href={tab.href}
-                    className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
+                    className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap flex-shrink-0 ${
                       isActive
                         ? 'bg-gray-50 text-gray-900'
                         : 'text-white/80 hover:text-white hover:bg-white/10'

@@ -169,7 +169,7 @@ export default function PassportPage() {
         {/* Career Stats */}
         <div className="card mb-6">
           <h3 className="font-semibold text-gray-900 mb-4">Estadisticas de Carrera</h3>
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
             {[
               { label: 'Partidos', value: passport?.career.totalMatches || 0 },
               { label: 'Goles', value: passport?.career.totalGoals || 0 },

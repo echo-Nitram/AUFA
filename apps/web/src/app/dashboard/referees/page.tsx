@@ -168,7 +168,7 @@ export default function RefereesPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Arbitros</h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
+      <div className="flex flex-wrap gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit max-w-full">
         <button
           className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
             tab === 'marketplace' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
@@ -201,7 +201,7 @@ export default function RefereesPage() {
           {/* Day filter */}
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500">Filtrar por dia:</span>
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-1">
               <button
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                   filterDay === undefined ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'

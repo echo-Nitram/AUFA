@@ -59,7 +59,7 @@ export default function SanctionsPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-8">Tribunal de Penas</h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex flex-wrap gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit max-w-full">
         {([
           { key: 'active' as Tab, label: 'Sanciones Activas', count: activeSanctions.length },
           { key: 'pending' as Tab, label: 'Pendientes de Tribunal', count: pendingSanctions.length },

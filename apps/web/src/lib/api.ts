@@ -126,7 +126,37 @@ export const aufaIdApi = {
     apiFetch(`/api/aufa-id/lookup/${ci}`, { token, tenantId }),
   getPassport: (playerId: string, token: string) =>
     apiFetch(`/api/aufa-id/passport/${playerId}`, { token }),
+  listPendingIdentities: (tenantId: string, token: string) =>
+    apiFetch('/api/aufa-id/identity/pending', { tenantId, token }),
+  validateIdentity: (
+    tenantId: string,
+    token: string,
+    playerId: string,
+    status: 'APPROVED' | 'REJECTED',
+    reason?: string
+  ) =>
+    apiFetch(`/api/aufa-id/identity/${playerId}/validate`, {
+      tenantId,
+      token,
+      method: 'POST',
+      body: JSON.stringify({ status, reason }),
+    }),
 };
+
+/**
+ * Identity and medical documents live behind /api/files, which requires a
+ * bearer token. An <img src> cannot send one, so fetch the bytes here and let
+ * the caller turn them into an object URL.
+ */
+export async function fetchPrivateFile(path: string, token: string): Promise<string> {
+  const response = await fetch(assetUrl(path), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  return URL.createObjectURL(await response.blob());
+}
 
 // Treasury
 export const treasuryApi = {

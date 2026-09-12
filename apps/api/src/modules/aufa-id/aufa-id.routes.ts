@@ -27,6 +27,16 @@ router.post('/medical/upload', authenticate, aufaIdController.uploadMedicalClear
 // Sporting passport: career record across leagues. Requires a session.
 router.get('/passport/:playerId', authenticate, aufaIdController.getPassport);
 
+// League Admin: players of this league waiting for identity review
+router.get(
+  '/identity/pending',
+  authenticate,
+  resolveTenant,
+  requireTenant,
+  requireTenantAdmin,
+  aufaIdController.listPendingIdentities
+);
+
 // League Admin: validate player identity
 router.post(
   '/identity/:playerId/validate',

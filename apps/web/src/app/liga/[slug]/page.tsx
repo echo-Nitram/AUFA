@@ -71,12 +71,14 @@ export default function PublicLeaguePage() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Mini Standings */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">Posiciones</h3>
-              <Link href={`${basePath}/posiciones`} className="text-xs text-primary hover:underline">Ver completa</Link>
+              <Link href={`${basePath}/posiciones`} className="text-xs text-primary hover:underline whitespace-nowrap">Ver completa</Link>
             </div>
+            {/* La tabla no entra en un celular: que scrollee ella, no la pagina. */}
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-gray-500 text-xs uppercase">
@@ -105,6 +107,7 @@ export default function PublicLeaguePage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 

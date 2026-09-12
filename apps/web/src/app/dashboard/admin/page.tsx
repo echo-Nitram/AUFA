@@ -171,7 +171,7 @@ export default function AdminPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Administrar Liga</h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
+      <div className="flex flex-wrap gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit max-w-full">
         <button
           className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
             tab === 'members' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
@@ -208,8 +208,8 @@ export default function AdminPage() {
           {/* Add member form */}
           <form onSubmit={handleAddMember} className="card">
             <h3 className="font-semibold text-gray-900 mb-3">Agregar Miembro</h3>
-            <div className="flex items-end gap-3">
-              <div className="flex-1">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex-1 min-w-0">
                 <label className="block text-sm text-gray-600 mb-1">Email del usuario</label>
                 <input
                   type="email"
@@ -220,7 +220,7 @@ export default function AdminPage() {
                   required
                 />
               </div>
-              <div className="w-40">
+              <div className="sm:w-40">
                 <label className="block text-sm text-gray-600 mb-1">Rol</label>
                 <select className="input-field" value={newRole} onChange={e => setNewRole(e.target.value as any)}>
                   <option value="OPERATOR">Operador</option>
@@ -236,12 +236,12 @@ export default function AdminPage() {
             <h3 className="font-semibold text-gray-900 mb-3">Miembros Actuales</h3>
             <div className="divide-y divide-gray-100">
               {members.map(member => (
-                <div key={member.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="font-medium text-gray-900">{member.user.email}</p>
+                <div key={member.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 break-all">{member.user.email}</p>
                     <p className="text-xs text-gray-400">ID: {member.user.id.slice(0, 8)}...</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-shrink-0">
                     <select
                       className="input-field text-sm w-36"
                       value={member.role}

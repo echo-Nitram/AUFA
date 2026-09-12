@@ -534,7 +534,7 @@ export default function MatchesPage() {
               </div>
 
               {/* Submit */}
-              <div className="flex gap-3 pt-4 border-t">
+              <div className="flex flex-wrap gap-3 pt-4 border-t">
                 <button type="submit" className="btn-primary">
                   Guardar y Actualizar Posiciones
                 </button>
@@ -562,9 +562,9 @@ export default function MatchesPage() {
               <div className="space-y-3">
                 {dayMatches.map((match: any) => (
                   <div key={match.id} className="card">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-6 flex-1">
-                        <div className="text-right flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3 sm:gap-6 flex-1 min-w-0">
+                        <div className="text-right flex-1 min-w-0">
                           <span className="font-medium">{match.homeTeam?.name}</span>
                         </div>
                         <div className="flex items-center gap-2 min-w-[80px] justify-center">
@@ -578,11 +578,11 @@ export default function MatchesPage() {
                             </span>
                           )}
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <span className="font-medium">{match.awayTeam?.name}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 ml-4">
+                      <div className="flex items-center gap-3 flex-shrink-0 sm:ml-4">
                         <span className={statusLabels[match.status]?.cls || 'badge'}>
                           {statusLabels[match.status]?.text || match.status}
                         </span>

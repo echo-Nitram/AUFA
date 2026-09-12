@@ -200,6 +200,61 @@ export async function getPassport(req: Request, res: Response) {
 }
 
 /**
+ * Players of this league waiting for their identity to be reviewed.
+ *
+ * Only players registered in a team of this league appear: validating an AUFA ID
+ * is trusted by every other league, so it belongs to an organizer the player
+ * actually plays for.
+ */
+export async function listPendingIdentities(req: AuthRequest, res: Response) {
+  try {
+    const players = await prisma.player.findMany({
+      where: {
+        identityStatus: 'PENDING',
+        // Nothing to review until the documents are uploaded.
+        ciPhotoFrontUrl: { not: null },
+        teamPlayers: { some: { isActive: true, team: { tenantId: req.tenantId! } } },
+      },
+      select: {
+        id: true,
+        aufaId: true,
+        fullName: true,
+        ci: true,
+        dateOfBirth: true,
+        ciPhotoFrontUrl: true,
+        ciPhotoBackUrl: true,
+        selfieUrl: true,
+        updatedAt: true,
+        teamPlayers: {
+          where: { isActive: true, team: { tenantId: req.tenantId! } },
+          select: { team: { select: { name: true } } },
+          take: 1,
+        },
+      },
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    res.json(
+      players.map((p) => ({
+        playerId: p.id,
+        aufaId: p.aufaId,
+        fullName: p.fullName,
+        ci: p.ci,
+        dateOfBirth: p.dateOfBirth,
+        teamName: p.teamPlayers[0]?.team.name ?? null,
+        ciPhotoFrontUrl: p.ciPhotoFrontUrl,
+        ciPhotoBackUrl: p.ciPhotoBackUrl,
+        selfieUrl: p.selfieUrl,
+        submittedAt: p.updatedAt,
+      }))
+    );
+  } catch (error) {
+    console.error('ListPendingIdentities error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+/**
  * League admin validates a player's identity.
  */
 export async function validateIdentity(req: AuthRequest, res: Response) {

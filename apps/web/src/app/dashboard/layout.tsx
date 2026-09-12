@@ -18,6 +18,7 @@ const navigation = [
   { name: 'Finanzas', href: '/dashboard/treasury', icon: '$' },
   { name: 'Sanciones', href: '/dashboard/sanctions', icon: 'SN' },
   { name: 'Mi AUFA ID', href: '/dashboard/passport', icon: 'ID' },
+  { name: 'Identidad', href: '/dashboard/identity', icon: 'VI' },
   { name: 'Administrar', href: '/dashboard/admin', icon: 'AD' },
 ];
 
